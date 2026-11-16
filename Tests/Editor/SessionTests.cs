@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using Dennoko.DTXTool.Core;
 using NUnit.Framework;
 using UnityEditor;
@@ -423,7 +423,7 @@ namespace Dennoko.DTXTool.Tests
         {
             var s = Start();
             var layer = AddRedLayer(s, 0, 1);
-            DocumentCommands.EditLayer(layer.id, "flatten", l => l.normalKind = NormalKind.Flatten);
+            DocumentCommands.EditLayer(layer.id, "flatten", l => l.replaceNormal = true);
             DocumentCommands.Edit("size", d => DocumentOps.SetSize(d, 128));
 
             var bake = TextureBaker.Bake(s, DocumentHost.instance.Doc);
@@ -507,7 +507,7 @@ namespace Dennoko.DTXTool.Tests
                 l.name = "布 Cloth";
                 l.blendMode = BlendMode.Multiply;
                 l.opacity = 0.5f;
-                l.normalKind = NormalKind.Flatten;
+                l.replaceNormal = true;
             });
             var second = DocumentCommands.AddSelectionLayer("add", "Top", Bits(s, 2, 3), null);
             DocumentCommands.EditLayer(second.id, "hide", l => l.visible = false);

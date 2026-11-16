@@ -266,8 +266,8 @@ namespace Dennoko.DTXTool
             Check(doc.background.normalTexture, doc.background.normalKind == BackgroundNormalKind.Texture);
             foreach (var l in doc.layers)
             {
-                Check(l.baseTexture, l.fillKind == FillKind.Texture);
-                Check(l.normalTexture, l.normalKind == NormalKind.Texture);
+                Check(l.baseTexture, true);
+                Check(l.normalTexture, true);
                 Check(l.mask.image, l.mask.source == MaskSource.Image);
             }
             return n;

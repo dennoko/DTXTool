@@ -10,8 +10,9 @@ namespace Dennoko.DTXTool
     /// <summary>
     /// ツールのウィンドウ。skill の画面パターン P4（シーン作業）: 状態は Idle（未開始）と Working（作業中）。
     ///   Idle    : B1 対象カードと主ボタン「作業開始」だけ
-    ///   Working : B7 作業中バナー + B1 + レイヤー一覧 + 選択中レイヤーの設定 + B3 UV ビュー + B5 出力カード
+    ///   Working : B7 作業中バナー + B1 + レイヤー一覧 + 選択中レイヤーのマスク・質感 + PSD カード、出力ドック（解像度・ファイル名）
     ///             主ボタンは「PNG 出力」。範囲を選んでいる間だけ「選択を確定」に替わる（主ボタンは常に 1 つ）
+    ///             範囲を選んでいる間は B3 UV ビューをスクロール領域の外（上）に固定し、出力ドックと PSD カードを隠す
     /// 状態を持たず、表示はすべて DocumentHost / SettingsService / SessionController から作る。
     /// ウィンドウを閉じると作業を終え、プレビューを元のテクスチャへ戻す（リロードでは OnDestroy は呼ばれない）。
     /// </summary>
@@ -115,9 +116,13 @@ namespace Dennoko.DTXTool
                 Bind.Show(root.Q("session-banner"), working);
                 Bind.Show(root.Q("select-card"), selecting);
                 Bind.Show(root.Q("layers-card"), working);
-                Bind.Show(root.Q("uv-card"), working);
+                // UV ビューは範囲を選んでいる間だけ、スクロール領域の外（上）に固定して出す
+                Bind.Show(root.Q("uv-card"), selecting);
                 // 範囲を選んでいる間は、出力の設定を出さない（今やることだけを見せる）
-                Bind.Show(root.Q("output-card"), working && !selecting);
+                bool output = working && !selecting;
+                Bind.Show(root.Q("psd-card"), output);
+                Bind.Show(root.Q("output-dock"), output);
+                root.Q("footer").EnableInClassList("dennoko-footer--joined", output);
             });
         }
 
@@ -296,11 +301,19 @@ namespace Dennoko.DTXTool
     /// </summary>
     internal sealed class TargetPropertyRows
     {
+        private const string DetailsOpenKey = "DTXTool.TargetDetailsOpen";
+
         private readonly VisualElement _group;
         private readonly DropdownField _base, _normal;
 
         public TargetPropertyRows(VisualElement root)
         {
+            // プロパティとメッシュの情報は「▶ 詳細」に畳む（開閉はエディターを閉じるまで覚える）
+            var details = root.Q("target-details");
+            root.Q<Label>("target-details-title").text = L10n.T("details.title");
+            DennokoBlockUI.BindDetails(details, SessionState.GetBool(DetailsOpenKey, false), open => SessionState.SetBool(DetailsOpenKey, open));
+            UiHub.Watch(details, () => Bind.Show(details, SessionController.Current != null));
+
             _group = root.Q("target-props");
             _base = root.Q<DropdownField>("prop-base");
             _normal = root.Q<DropdownField>("prop-normal");
@@ -343,15 +356,16 @@ namespace Dennoko.DTXTool
     }
 
     /// <summary>
-    /// B5 出力カード: 解像度・ファイル名・保存先の表示と、PSD の出力 / 読み込み。
-    /// PNG 出力はフッターの主ボタン。
+    /// 出力ドック（PNG 出力の解像度・ファイル名。保存先と実際のファイル名はファイル名欄のツールチップ）と、
+    /// PSD カード（PSD の保存 / 読み込み）。PNG 出力はフッターの主ボタン。
     /// </summary>
     internal sealed class DtxOutputCard
     {
         public DtxOutputCard(VisualElement root)
         {
-            root.Q<Label>("output-header").text = L10n.T("output.header");
+            root.Q<Label>("psd-header").text = L10n.T("psd.header");
             root.Q<Label>("size-label").text = L10n.T("output.size");
+            root.Q<Label>("output-name-label").text = L10n.T("output.name");
 
             var sizes = new List<(Button, int)>();
             foreach (int size in DtxDocument.Sizes) sizes.Add((root.Q<Button>("size-" + size), size));
@@ -359,18 +373,14 @@ namespace Dennoko.DTXTool
                 v => DocumentCommands.Edit(L10n.T("undo.resolution"), d => DocumentOps.SetSize(d, v)));
 
             var name = root.Q<TextField>("output-name");
-            name.label = L10n.T("output.name");
-            name.tooltip = L10n.T("tooltip.outputName");
             Bind.Text(name, SettingKeys.OutputName, () => OutputPaths.BaseName(SessionController.Current));
-
-            var info = root.Q<Label>("output-info");
-            UiHub.Watch(info, () =>
+            UiHub.Watch(name, () =>
             {
                 var s = SessionController.Current;
                 if (s == null) return;
                 string n = OutputPaths.BaseName(s);
-                info.text = OutputPaths.FolderFor(s) + "/  ·  " + n + OutputPaths.BaseSuffix + ".png  ·  " + n + OutputPaths.NormalSuffix + ".png";
-                info.tooltip = info.text;
+                name.tooltip = L10n.T("tooltip.outputName") + "\n" + OutputPaths.FolderFor(s) + "/\n"
+                               + n + OutputPaths.BaseSuffix + ".png\n" + n + OutputPaths.NormalSuffix + ".png";
             });
 
             var export = root.Q<Button>("psd-export");

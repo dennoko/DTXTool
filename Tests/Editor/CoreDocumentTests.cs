@@ -24,13 +24,11 @@ namespace Dennoko.DTXTool.Tests
                 visible = false,
                 opacity = 0.75f,
                 blendMode = BlendMode.Overlay,
-                fillKind = FillKind.Texture,
                 color = new Color(0.9f, 0.8f, 0.7f, 0.6f),
                 baseTexture = new TextureRef { guid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", path = "Assets/Tex/cloth.png" },
-                tint = new Color(0.5f, 0.6f, 0.7f, 0.8f),
-                normalKind = NormalKind.Texture,
                 normalTexture = new TextureRef { guid = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", path = "Assets/Tex/cloth_n.png" },
                 normalScale = 1.5f,
+                replaceNormal = true,
                 placementMode = PlacementMode.Decal,
                 baseXform = new UvTransform { tiling = new Vector2(4f, 2f), offset = new Vector2(0.25f, -0.5f), rotation = 30f },
                 syncNormal = false,
@@ -49,7 +47,7 @@ namespace Dennoko.DTXTool.Tests
             a.mask.feather = 0.0125f;
             doc.layers.Add(a);
 
-            var b = new Layer { id = Layer.NewId(), name = "Image", normalKind = NormalKind.Flatten };
+            var b = new Layer { id = Layer.NewId(), name = "Image", replaceNormal = true, syncNormal = true };
             b.mask.source = MaskSource.Image;
             b.mask.image = new TextureRef { guid = "cccccccccccccccccccccccccccccccc", path = "Assets/Tex/mask.png" };
             doc.layers.Add(b);
@@ -90,13 +88,13 @@ namespace Dennoko.DTXTool.Tests
             Assert.AreEqual(e.mask.invert, a.mask.invert);
             Assert.AreEqual(e.mask.opacity, a.mask.opacity);
             Assert.AreEqual(e.mask.feather, a.mask.feather);
-            Assert.AreEqual(e.fillKind, a.fillKind);
             Assert.AreEqual(e.color, a.color);
             AssertSame(e.baseTexture, a.baseTexture);
-            Assert.AreEqual(e.tint, a.tint);
-            Assert.AreEqual(e.normalKind, a.normalKind);
             AssertSame(e.normalTexture, a.normalTexture);
             Assert.AreEqual(e.normalScale, a.normalScale);
+            Assert.AreEqual(e.replaceNormal, a.replaceNormal);
+            Assert.AreEqual(-1, a.legacyFillKind, "decoded layers are always in the current form");
+            Assert.AreEqual(-1, a.legacyNormalKind);
             Assert.AreEqual(e.placementMode, a.placementMode);
             AssertSame(e.baseXform, a.baseXform);
             Assert.AreEqual(e.syncNormal, a.syncNormal);
@@ -117,6 +115,44 @@ namespace Dennoko.DTXTool.Tests
             Assert.AreEqual(e.tiling, a.tiling);
             Assert.AreEqual(e.offset, a.offset);
             Assert.AreEqual(e.rotation, a.rotation);
+        }
+
+        // ── 旧形式からの移行 ──
+
+        [Test]
+        public void MigrateLegacy_TurnsOldChoicesIntoTheCurrentForm()
+        {
+            var tex = new TextureRef { guid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" };
+            var normal = new TextureRef { guid = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" };
+
+            // 単色 + なし: 使っていなかったテクスチャは外す。同じ配置だったならノーマル側へ写す
+            var color = new Layer { legacyFillKind = 0, legacyNormalKind = 0, color = Color.red, baseTexture = tex.Clone(), normalTexture = normal.Clone(), syncNormal = true };
+            color.baseXform.tiling = new Vector2(3f, 3f);
+            Assert.IsTrue(DocumentOps.MigrateLegacy(color));
+            Assert.IsFalse(color.HasBaseTexture);
+            Assert.IsFalse(color.HasNormalTexture);
+            Assert.AreEqual(Color.red, color.color);
+            Assert.IsFalse(color.syncNormal);
+            Assert.AreEqual(new Vector2(3f, 3f), color.normalXform.tiling);
+
+            // テクスチャ × Tint + マップ: Tint が色になり、ノーマルは RNM で重ねる
+            var textured = new Layer { legacyFillKind = 1, legacyNormalKind = 2, color = Color.red, legacyTint = Color.gray, baseTexture = tex.Clone(), normalTexture = normal.Clone() };
+            Assert.IsTrue(DocumentOps.MigrateLegacy(textured));
+            Assert.IsTrue(textured.HasBaseTexture);
+            Assert.AreEqual(Color.gray, textured.color);
+            Assert.IsTrue(textured.HasNormalTexture);
+            Assert.IsFalse(textured.replaceNormal);
+
+            // 平坦化: テクスチャを外して凹凸を消す
+            var flatten = new Layer { legacyFillKind = 0, legacyNormalKind = 1, normalTexture = normal.Clone() };
+            Assert.IsTrue(DocumentOps.MigrateLegacy(flatten));
+            Assert.IsFalse(flatten.HasNormalTexture);
+            Assert.IsTrue(flatten.replaceNormal);
+            Assert.IsTrue(flatten.AffectsNormal);
+
+            // 移行済みのものは触らない
+            Assert.IsFalse(DocumentOps.MigrateLegacy(flatten));
+            Assert.IsFalse(DocumentOps.MigrateLegacy(new Layer()));
         }
 
         // ── DocumentCodec ──

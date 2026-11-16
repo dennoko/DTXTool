@@ -231,6 +231,7 @@ namespace Dennoko.DTXTool.Tests
             var layer = new Layer
             {
                 baseXform = new UvTransform { tiling = new Vector2(3f, 2f), rotation = 20f },
+                baseTexture = new TextureRef { guid = "base" },
                 syncNormal = true,
                 normalXform = new UvTransform { tiling = new Vector2(9f, 9f) },
             };
@@ -239,6 +240,12 @@ namespace Dennoko.DTXTool.Tests
             Assert.AreEqual(a0, a1);
             Assert.AreEqual(t0, t1);
             Assert.AreEqual(-20f, UvMath.NormalRotation(layer), Eps);
+
+            // ベースのテクスチャが無ければ、同じ配置にしていてもノーマルは自分の配置を使う
+            layer.baseTexture = new TextureRef();
+            UvMath.Affine(layer, true, out var a2, out _);
+            Assert.AreNotEqual(a0, a2);
+            Assert.AreEqual(0f, UvMath.NormalRotation(layer), Eps);
             layer.placementMode = PlacementMode.Decal;
             layer.decalRotation = 15f;
             Assert.AreEqual(15f, UvMath.NormalRotation(layer), Eps);

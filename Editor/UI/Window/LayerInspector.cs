@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Dennoko.DTXTool.Core;
+using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -90,25 +91,24 @@ namespace Dennoko.DTXTool
     }
 
     /// <summary>
-    /// 選択中のレイヤー（または下地）の設定カード。
-    ///   レイヤー設定: 名前・ブレンド・不透明度・マスク（範囲の再調整 / 画像・反転・不透明度・ぼかし）
-    ///   質感        : ベース（単色 / テクスチャ + Tint）とノーマル（なし / 平坦化 / マップ + 強さ）
-    ///   配置        : タイリング / デカール（テクスチャを使う時だけ出す）
+    /// 選択中のレイヤー（または下地）の設定カード。名前・ブレンド・不透明度はレイヤー一覧の下（LayersCard）にある。
+    ///   マスク : 範囲の再調整（大きいボタン）とマスク画像。反転・不透明度・ぼかしは「▶ 詳細設定」に畳む
+    ///   質感   : 色とテクスチャ（両方効く: テクスチャ × 色）、ノーマルマップと「下地の凹凸を消す」。
+    ///            配置はそれぞれのテクスチャ欄のすぐ下に、テクスチャを入れた時だけ出す
     /// 使わない欄は隠す（グレーアウトにしない）。
     /// </summary>
     internal sealed class LayerInspector
     {
-        private static readonly BlendMode[] BlendModes =
-            { BlendMode.Normal, BlendMode.Multiply, BlendMode.Additive, BlendMode.Screen, BlendMode.Overlay };
+        private const string MaskDetailsOpenKey = "DTXTool.MaskDetailsOpen";
 
         private readonly VisualElement _root;
 
         public LayerInspector(VisualElement root)
         {
             _root = root;
-            BuildLayerCard(root);
+            BuildMaskCard(root);
             BuildMaterialCard(root);
-            BuildPlacementCard(root);
+            BuildPlacement(root);
             BuildBackgroundCard(root);
             UiHub.Watch(root.Q("layer-card"), RefreshVisibility);
         }
@@ -125,40 +125,12 @@ namespace Dennoko.DTXTool
             }
         }
 
-        // ── レイヤー設定（基本とマスク） ──
+        // ── マスク ──
 
-        private void BuildLayerCard(VisualElement root)
+        private void BuildMaskCard(VisualElement root)
         {
-            root.Q<Label>("layer-header").text = L10n.T("layer.header");
+            root.Q<Label>("layer-header").text = L10n.T("mask.title");
 
-            var name = root.Q<TextField>("layer-name");
-            name.label = L10n.T("layer.name");
-            name.isDelayed = true;
-            DocBind.Layer(name, "undo.rename", l => l.name, (l, v) => l.name = string.IsNullOrWhiteSpace(v) ? l.name : v.Trim());
-
-            var blend = root.Q<DropdownField>("layer-blend");
-            blend.label = L10n.T("layer.blend");
-            var labels = new List<string>();
-            foreach (var m in BlendModes) labels.Add(BlendLabel(m));
-            blend.choices = labels;
-            blend.RegisterValueChangedCallback(e =>
-            {
-                if (e.target != blend || blend.index < 0) return;
-                var mode = BlendModes[blend.index];
-                DocumentCommands.EditSelected(L10n.T("undo.blend"), l => l.blendMode = mode);
-            });
-            UiHub.Watch(blend, () =>
-            {
-                var l = DocumentHost.instance.SelectedLayer;
-                if (l != null) blend.SetValueWithoutNotify(BlendLabel(l.blendMode));
-            });
-
-            var opacity = root.Q<Slider>("layer-opacity");
-            opacity.label = L10n.T("layer.opacity");
-            DocBind.Layer(opacity, "undo.opacity", l => l.opacity, (l, v) => l.opacity = Mathf.Clamp01(v));
-
-            root.Q<Label>("mask-title").text = L10n.T("mask.title");
-            root.Q<Label>("mask-source-label").text = L10n.T("mask.source");
             var source = root.Q<Label>("mask-source");
             var reselect = root.Q<Button>("mask-reselect");
             reselect.clicked += () =>
@@ -173,12 +145,15 @@ namespace Dennoko.DTXTool
                 var l = DocumentHost.instance.SelectedLayer;
                 if (l == null) return;
                 bool editing = DtxModeController.Mode == DtxMode.Reselect && DtxModeController.EditingLayerId == l.id;
-                source.text = editing ? L10n.T("layers.reselecting") : SourceLabel(l.mask.source);
-                reselect.text = editing ? L10n.T("button.confirm")
-                    : l.mask.source == MaskSource.Selection ? L10n.T("button.reselect") : L10n.T("button.toSelection");
+                bool selection = l.mask.source == MaskSource.Selection;
+                reselect.text = editing ? L10n.T("button.confirmArea")
+                    : selection ? L10n.T("button.reselectArea") : L10n.T("button.toSelection");
                 reselect.tooltip = editing ? string.Empty
-                    : l.mask.source == MaskSource.Selection ? L10n.T("tooltip.reselect") : L10n.T("tooltip.toSelection");
+                    : selection ? L10n.T("tooltip.reselect") : L10n.T("tooltip.toSelection");
                 Bind.Active(reselect, editing);
+                // 範囲が選択以外から来ている時だけ、どこから来たかを書く（画像はマスク画像の欄で分かるので PSD の時だけ）
+                source.text = l.mask.source == MaskSource.Embedded ? L10n.T("mask.embeddedHint") : string.Empty;
+                Bind.Show(source, l.mask.source == MaskSource.Embedded && !editing);
             });
 
             var image = root.Q<ObjectField>("mask-image");
@@ -203,6 +178,11 @@ namespace Dennoko.DTXTool
                 if (l != null) image.SetValueWithoutNotify(l.mask.source == MaskSource.Image ? TextureInfo.Resolve(l.mask.image) : null);
             });
 
+            // 反転・不透明度・ぼかしは「▶ 詳細設定」に畳む（開閉はエディターを閉じるまで覚える）
+            var details = root.Q("mask-details");
+            root.Q<Label>("mask-details-title").text = L10n.T("details.options");
+            DennokoBlockUI.BindDetails(details, SessionState.GetBool(MaskDetailsOpenKey, false), open => SessionState.SetBool(MaskDetailsOpenKey, open));
+
             var invert = root.Q<Toggle>("mask-invert");
             invert.text = L10n.T("mask.invert");
             DocBind.Layer(invert, "undo.mask", l => l.mask.invert, (l, v) => l.mask.invert = v);
@@ -218,16 +198,19 @@ namespace Dennoko.DTXTool
             DocBind.Layer(feather, "undo.mask",
                 l => l.mask.feather * DocumentHost.instance.Doc.width,
                 (l, v) => l.mask.feather = Mathf.Max(0f, v) / Mathf.Max(1, DocumentHost.instance.Doc.width));
-        }
 
-        private static string SourceLabel(MaskSource source)
-        {
-            switch (source)
+            // 閉じている間は、初期値から変えている項目だけを見出し行にチップで出す
+            var chips = root.Q("mask-details-chips");
+            UiHub.Watch(chips, () =>
             {
-                case MaskSource.Image: return L10n.T("mask.source.image");
-                case MaskSource.Embedded: return L10n.T("mask.source.embedded");
-                default: return L10n.T("mask.source.selection");
-            }
+                chips.Clear();
+                var l = DocumentHost.instance.SelectedLayer;
+                if (l == null) return;
+                if (l.mask.invert) chips.Add(DennokoBlockUI.Chip(null, L10n.T("mask.invert")));
+                if (l.mask.opacity < 0.999f) chips.Add(DennokoBlockUI.Chip(null, L10n.T("mask.opacity") + " " + Mathf.RoundToInt(l.mask.opacity * 100f) + "%"));
+                int px = DocumentOps.FeatherPixels(l.mask, DocumentHost.instance.Doc.width);
+                if (px > 0) chips.Add(DennokoBlockUI.Chip(null, L10n.T("mask.feather") + " " + px + "px"));
+            });
         }
 
         // ── 質感 ──
@@ -235,116 +218,108 @@ namespace Dennoko.DTXTool
         private void BuildMaterialCard(VisualElement root)
         {
             root.Q<Label>("material-header").text = L10n.T("material.header");
-            root.Q<Label>("fill-label").text = L10n.T("material.base");
-
-            var fillColor = root.Q<Button>("fill-color");
-            var fillTexture = root.Q<Button>("fill-texture");
-            fillColor.text = L10n.T("term.color");
-            fillTexture.text = L10n.T("term.texture");
-            DocBind.Choice(new[] { (fillColor, FillKind.Color), (fillTexture, FillKind.Texture) },
-                () => DocumentHost.instance.SelectedLayer?.fillKind ?? FillKind.Color,
-                v => DocumentCommands.EditSelected(L10n.T("undo.fill"), l => l.fillKind = v));
 
             var color = root.Q<ColorField>("base-color");
             color.label = L10n.T("material.color");
+            color.tooltip = L10n.T("tooltip.baseColor");
             DocBind.Layer(color, "undo.fill", l => l.color, (l, v) => l.color = v);
 
             var texture = root.Q<ObjectField>("base-texture");
             texture.label = L10n.T("term.texture");
-            DocBind.LayerTexture(texture, "undo.fill", l => l.baseTexture, (l, v) => l.baseTexture = v);
-
-            var tint = root.Q<ColorField>("base-tint");
-            tint.label = L10n.T("material.tint");
-            tint.tooltip = L10n.T("tooltip.tint");
-            DocBind.Layer(tint, "undo.fill", l => l.tint, (l, v) => l.tint = v);
-
-            root.Q<Label>("normal-label").text = L10n.T("material.normal");
-            var none = root.Q<Button>("normal-none");
-            var flatten = root.Q<Button>("normal-flatten");
-            var map = root.Q<Button>("normal-texture");
-            none.text = L10n.T("normal.none");
-            none.tooltip = L10n.T("tooltip.normalNone");
-            flatten.text = L10n.T("normal.flatten");
-            flatten.tooltip = L10n.T("tooltip.normalFlatten");
-            map.text = L10n.T("normal.map");
-            map.tooltip = L10n.T("tooltip.normalMap");
-            DocBind.Choice(new[] { (none, NormalKind.None), (flatten, NormalKind.Flatten), (map, NormalKind.Texture) },
-                () => DocumentHost.instance.SelectedLayer?.normalKind ?? NormalKind.None,
-                v => DocumentCommands.EditSelected(L10n.T("undo.normal"), l => l.normalKind = v));
+            texture.tooltip = L10n.T("tooltip.baseTexture");
+            DocBind.LayerTexture(texture, "undo.fill", l => l.baseTexture, (l, v) =>
+            {
+                // 色はテクスチャに掛かるので、テクスチャを初めて入れた時は白にして、テクスチャの色をそのまま見せる
+                // （新しいレイヤーには見分け用の色が付いている）。同じ Undo の中なので戻せる
+                if (!l.HasBaseTexture && !v.IsEmpty) l.color = new Color(1f, 1f, 1f, l.color.a);
+                l.baseTexture = v;
+            });
 
             var normalMap = root.Q<ObjectField>("normal-map");
-            normalMap.label = L10n.T("material.normalMap");
+            normalMap.label = L10n.T("material.normal");
+            normalMap.tooltip = L10n.T("tooltip.normalMap");
             DocBind.LayerTexture(normalMap, "undo.normal", l => l.normalTexture, (l, v) => l.normalTexture = v);
 
             var scale = root.Q<Slider>("normal-scale");
             scale.label = L10n.T("material.normalScale");
             DocBind.Layer(scale, "undo.normal", l => l.normalScale, (l, v) => l.normalScale = v);
+
+            var replace = root.Q<Toggle>("replace-normal");
+            replace.text = L10n.T("normal.replace");
+            replace.tooltip = L10n.T("tooltip.normalReplace");
+            DocBind.Layer(replace, "undo.normal", l => l.replaceNormal, (l, v) => l.replaceNormal = v);
         }
 
-        // ── 配置 ──
+        // ── 配置（メインテクスチャ・ノーマルそれぞれのテクスチャ欄の下） ──
 
-        private void BuildPlacementCard(VisualElement root)
+        private void BuildPlacement(VisualElement root)
         {
-            root.Q<Label>("placement-header").text = L10n.T("placement.header");
-            root.Q<Label>("placement-label").text = L10n.T("placement.mode");
-
-            var reset = DennokoIcons.Apply(root.Q<Button>("placement-reset"), DennokoIcons.Refresh, "↺", L10n.T("tooltip.resetPlacement"));
-            reset.clicked += () => DocumentCommands.EditSelected(L10n.T("undo.placement"), l =>
+            void Reset(Layer l)
             {
                 l.baseXform = new UvTransform();
                 l.normalXform = new UvTransform();
-                l.syncNormal = true;
+                l.syncNormal = false;
                 l.decalCenter = new Vector2(0.5f, 0.5f);
                 l.decalSize = new Vector2(0.25f, 0.25f);
                 l.decalRotation = 0f;
-            });
+            }
 
-            var tiling = root.Q<Button>("placement-tiling");
-            var decal = root.Q<Button>("placement-decal");
-            tiling.text = L10n.T("placement.tiling");
-            decal.text = L10n.T("placement.decal");
-            decal.tooltip = L10n.T("tooltip.decal");
-            DocBind.Choice(new[] { (tiling, PlacementMode.Tiling), (decal, PlacementMode.Decal) },
-                () => DocumentHost.instance.SelectedLayer?.placementMode ?? PlacementMode.Tiling,
-                v => DocumentCommands.EditSelected(L10n.T("undo.placement"), l => l.placementMode = v));
+            // 方式（タイリング / デカール）はレイヤーに 1 つ。ベースのテクスチャが無い時はノーマル側に出す
+            void ModeRow(string label, string tiling, string decal, string reset)
+            {
+                root.Q<Label>(label).text = L10n.T("placement.header");
+                var t = root.Q<Button>(tiling);
+                var d = root.Q<Button>(decal);
+                t.text = L10n.T("placement.tiling");
+                d.text = L10n.T("placement.decal");
+                d.tooltip = L10n.T("tooltip.decal");
+                DocBind.Choice(new[] { (t, PlacementMode.Tiling), (d, PlacementMode.Decal) },
+                    () => DocumentHost.instance.SelectedLayer?.placementMode ?? PlacementMode.Tiling,
+                    v => DocumentCommands.EditSelected(L10n.T("undo.placement"), l => l.placementMode = v));
+                var r = DennokoIcons.Apply(root.Q<Button>(reset), Icons.Refresh, "↺", L10n.T("tooltip.resetPlacement"));
+                r.clicked += () => DocumentCommands.EditSelected(L10n.T("undo.placement"), Reset);
+            }
+            ModeRow("placement-label", "placement-tiling", "placement-decal", "placement-reset");
+            ModeRow("normal-placement-label", "normal-placement-tiling", "normal-placement-decal", "normal-placement-reset");
 
-            Vector2Field V2(string name, string labelKey, Func<Layer, Vector2> get, Action<Layer, Vector2> set)
+            void V2(string name, string labelKey, Func<Layer, Vector2> get, Action<Layer, Vector2> set)
             {
                 var f = root.Q<Vector2Field>(name);
                 f.label = L10n.T(labelKey);
                 DocBind.Layer(f, "undo.placement", get, set);
-                return f;
             }
 
-            Slider Angle(string name, Func<Layer, float> get, Action<Layer, float> set)
+            void Angle(string name, Func<Layer, float> get, Action<Layer, float> set)
             {
                 var s = root.Q<Slider>(name);
                 s.label = L10n.T("placement.rotation");
                 DocBind.Layer(s, "undo.placement", get, set);
-                return s;
             }
 
+            // メインテクスチャ
             V2("base-tiling", "placement.tiling", l => l.baseXform.tiling, (l, v) => l.baseXform.tiling = v);
             V2("base-offset", "placement.offset", l => l.baseXform.offset, (l, v) => l.baseXform.offset = v);
             Angle("base-rotation", l => l.baseXform.rotation, (l, v) => l.baseXform.rotation = v);
+            V2("decal-center", "placement.decalCenter", l => l.decalCenter, (l, v) => l.decalCenter = v);
+            V2("decal-size", "placement.decalSize", l => l.decalSize, (l, v) => l.decalSize = v);
+            Angle("decal-rotation", l => l.decalRotation, (l, v) => l.decalRotation = v);
+
+            // ノーマル（デカールの位置はレイヤーに 1 つなので、ベースのテクスチャが無い時だけここに出す）
+            V2("normal-tiling", "placement.tiling", l => l.normalXform.tiling, (l, v) => l.normalXform.tiling = v);
+            V2("normal-offset", "placement.offset", l => l.normalXform.offset, (l, v) => l.normalXform.offset = v);
+            Angle("normal-rotation", l => l.normalXform.rotation, (l, v) => l.normalXform.rotation = v);
+            V2("normal-decal-center", "placement.decalCenter", l => l.decalCenter, (l, v) => l.decalCenter = v);
+            V2("normal-decal-size", "placement.decalSize", l => l.decalSize, (l, v) => l.decalSize = v);
+            Angle("normal-decal-rotation", l => l.decalRotation, (l, v) => l.decalRotation = v);
 
             var sync = root.Q<Toggle>("sync-normal");
             sync.text = L10n.T("placement.syncNormal");
             DocBind.Layer(sync, "undo.placement", l => l.syncNormal, (l, v) =>
             {
-                // 個別に切り替えた時は、今のベースの配置から始める
+                // 個別に戻した時は、今のベースの配置から始める
                 if (!v && l.syncNormal) l.normalXform = l.baseXform.Clone();
                 l.syncNormal = v;
             });
-
-            V2("normal-tiling", "placement.normalTiling", l => l.normalXform.tiling, (l, v) => l.normalXform.tiling = v);
-            V2("normal-offset", "placement.normalOffset", l => l.normalXform.offset, (l, v) => l.normalXform.offset = v);
-            Angle("normal-rotation", l => l.normalXform.rotation, (l, v) => l.normalXform.rotation = v);
-
-            V2("decal-center", "placement.decalCenter", l => l.decalCenter, (l, v) => l.decalCenter = v);
-            V2("decal-size", "placement.decalSize", l => l.decalSize, (l, v) => l.decalSize = v);
-            Angle("decal-rotation", l => l.decalRotation, (l, v) => l.decalRotation = v);
-            root.Q<Label>("decal-hint").text = L10n.T("placement.decalHint");
         }
 
         // ── 下地 ──
@@ -406,25 +381,27 @@ namespace Dennoko.DTXTool
                 Bind.Show(_root.Q("bg-texture"), bg.baseKind == BackgroundBaseKind.Texture);
                 Bind.Show(_root.Q("bg-normal-map"), bg.normalKind == BackgroundNormalKind.Texture);
             }
-
-            bool usesTexture = layer != null && (layer.fillKind == FillKind.Texture || layer.normalKind == NormalKind.Texture);
-            Bind.Show(_root.Q("placement-card"), show && usesTexture);
             if (layer == null) return;
 
             Bind.Show(_root.Q("mask-image"), layer.mask.source != MaskSource.Embedded);
-            Bind.Show(_root.Q("base-color"), layer.fillKind == FillKind.Color);
-            Bind.Show(_root.Q("base-texture"), layer.fillKind == FillKind.Texture);
-            Bind.Show(_root.Q("base-tint"), layer.fillKind == FillKind.Texture);
-            Bind.Show(_root.Q("normal-map"), layer.normalKind == NormalKind.Texture);
-            Bind.Show(_root.Q("normal-scale"), layer.normalKind == NormalKind.Texture);
 
+            bool baseTex = layer.HasBaseTexture;
+            bool normalTex = layer.HasNormalTexture;
             bool decal = layer.placementMode == PlacementMode.Decal;
+
+            // メインテクスチャの配置
+            Bind.Show(_root.Q("base-placement"), baseTex);
             Bind.Show(_root.Q("tiling-group"), !decal);
             Bind.Show(_root.Q("decal-group"), decal);
-            // ノーマルマップを使う時だけ「同じ配置にする」を出し、外したらノーマル用の配置を出す
-            bool normalMap = layer.normalKind == NormalKind.Texture;
-            Bind.Show(_root.Q("sync-normal"), normalMap);
-            Bind.Show(_root.Q("normal-xform-group"), normalMap && !layer.syncNormal);
+
+            // ノーマルの強さと配置。方式とデカールの位置は、ベースのテクスチャが無い時だけここで決める
+            Bind.Show(_root.Q("normal-options"), normalTex);
+            Bind.Show(_root.Q("normal-mode-row"), !baseTex);
+            Bind.Show(_root.Q("normal-decal-group"), decal && !baseTex);
+            // 「同じ配置にする」はベースのテクスチャをタイリングしている時だけ意味がある。オンなら個別の欄は隠す
+            bool canSync = baseTex && !decal;
+            Bind.Show(_root.Q("sync-normal"), canSync);
+            Bind.Show(_root.Q("normal-xform-group"), !decal && !(canSync && layer.syncNormal));
         }
     }
 }

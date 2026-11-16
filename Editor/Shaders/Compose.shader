@@ -23,7 +23,7 @@ Shader "Hidden/DTXTool/Compose"
     float4 _UvA;             // uv' = A·uv + T の A（m00, m01, m10, m11）
     float4 _UvT;             // T（xy）
     float _Decal;            // 1 = デカール（[0,1] の外は寄与 0）
-    float _NormalMode;       // レイヤー: 1 = 平坦化 / 2 = ノーマルマップ
+    float _NormalMode;       // レイヤー: 1 = 平坦化 / 2 = ノーマルマップを RNM で重ねる / 3 = ノーマルマップで置き換える
     float _NormalPacked;     // 1 = Normal map としてインポート済み（RG / AG 格納）
     float _NormalScale;
     float4 _NormalRot;       // (cos, sin)
@@ -195,7 +195,7 @@ Shader "Hidden/DTXTool/Compose"
             ENDCG
         }
 
-        // 5: BlendNormal（ノーマルマップ = RNM、平坦化 = (0,0,1) への置き換え）
+        // 5: BlendNormal（重ねる = RNM、置き換え = レイヤーの法線、平坦化 = (0,0,1)。どれも out = normalize(lerp(下, 目標, a))）
         Pass
         {
             CGPROGRAM
@@ -212,6 +212,10 @@ Shader "Hidden/DTXTool/Compose"
                 if (_NormalMode < 1.5)
                 {
                     target = float3(0.0, 0.0, 1.0);
+                }
+                else if (_NormalMode > 2.5)
+                {
+                    target = LayerNormal(luv, dx, dy);
                 }
                 else
                 {

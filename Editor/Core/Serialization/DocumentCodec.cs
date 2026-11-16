@@ -182,12 +182,15 @@ namespace Dennoko.DTXTool.Core
                     mc.Write(m.feather);
                 });
 
-                c.Write((int)l.fillKind);
+                // ベースとノーマルの種類は旧形式の並びのまま書く（古い DTXTool でもおおむね同じ見た目で読める）。
+                // 旧: 種類 0 = 単色 / 1 = テクスチャ × Tint。今の「テクスチャ × 色」は Tint に色を入れれば同じになる
+                c.Write(l.HasBaseTexture ? 1 : 0);
                 Write(c, l.color);
                 Write(c, l.baseTexture);
-                Write(c, l.tint);
+                Write(c, l.color);
 
-                c.Write((int)l.normalKind);
+                // 旧: 0 = なし / 1 = 平坦化 / 2 = マップ（置き換えは旧形式に無いのでマップとして書く）
+                c.Write(l.HasNormalTexture ? 2 : l.replaceNormal ? 1 : 0);
                 Write(c, l.normalTexture);
                 c.Write(l.normalScale);
 
@@ -198,6 +201,9 @@ namespace Dennoko.DTXTool.Core
                 Write(c, l.decalCenter);
                 Write(c, l.decalSize);
                 c.Write(l.decalRotation);
+
+                // ここから今の形式（これがあれば、上の種類は読まずに今の意味で読む）
+                c.Write(l.replaceNormal);
             });
         }
 
@@ -377,12 +383,12 @@ namespace Dennoko.DTXTool.Core
                     }
                 }
 
-                l.fillKind = (FillKind)c.Int();
+                int fillKind = c.Int();
                 l.color = c.Color(Color.white);
                 l.baseTexture = c.Texture();
-                l.tint = c.Color(Color.white);
+                var tint = c.Color(Color.white);
 
-                l.normalKind = (NormalKind)c.Int();
+                int normalKind = c.Int();
                 l.normalTexture = c.Texture();
                 l.normalScale = c.Float(1f);
 
@@ -393,6 +399,19 @@ namespace Dennoko.DTXTool.Core
                 l.decalCenter = c.Vector2(new Vector2(0.5f, 0.5f));
                 l.decalSize = c.Vector2(new Vector2(0.25f, 0.25f));
                 l.decalRotation = c.Float();
+
+                if (c.More)
+                {
+                    l.replaceNormal = c.Bool();
+                }
+                else
+                {
+                    // 旧形式: 種類の選択から今の形へ直す
+                    l.legacyFillKind = fillKind;
+                    l.legacyTint = tint;
+                    l.legacyNormalKind = normalKind;
+                    DocumentOps.MigrateLegacy(l);
+                }
             }
             if (string.IsNullOrEmpty(l.id)) l.id = Layer.NewId();
             return l;

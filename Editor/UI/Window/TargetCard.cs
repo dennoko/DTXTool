@@ -192,12 +192,18 @@ namespace Dennoko.DTXTool
 
             Bind.Show(_root.Q("target-sub"), showSub || showUv);
 
-            // 情報行: 三角形数 · サブメッシュ数 · 使っている UV
+            // 情報行（詳細の中）: 三角形数 · サブメッシュ数 · 使っている UV
+            string triangles = L10n.F("info.triangles", s.Analysis.TriangleCount.ToString("N0"));
             info.Clear();
-            info.Add(new Label(L10n.F("info.triangles", s.Analysis.TriangleCount.ToString("N0"))));
+            info.Add(new Label(triangles));
             if (s.Mesh.SubmeshCount > 1) info.Add(new Label(L10n.F("info.submeshes", s.Mesh.SubmeshCount)));
             info.Add(new Label("UV" + s.UVChannelUsed));
             Bind.Show(info, true);
+
+            // 詳細を閉じている間は、見出し行に三角形数だけを出す
+            var chips = _root.Q("target-details-chips");
+            chips.Clear();
+            chips.Add(DennokoBlockUI.Chip(null, triangles));
         }
     }
 }

@@ -1,8 +1,10 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
     <!-- P4 シーン作業（skill blocks/patterns.md）。状態は Idle（未開始）と Working（作業中）。
          Idle   : B1 対象カードと主ボタン「作業開始」だけ
-         Working: B7 バナー + B1 + レイヤー一覧 + 選択中レイヤーの設定 + B3 UV ビュー + B5 出力カード
-                  主ボタンは「PNG 出力」。範囲を選んでいる間だけ「選択を確定」に替わる
+         Working: B7 バナー + B1 + レイヤー一覧（名前・ブレンド・不透明度もここ）+ マスク + 質感 + PSD
+                  出力の解像度とファイル名はフッター直上の出力ドック。主ボタンは「PNG 出力」
+         範囲選択中: UV ビューをスクロール領域の外（上）に固定し、主ボタンは「選択を確定」
+         作業中にスクロールする量を減らすため、触る頻度の低い設定は「▶ 詳細」に畳む。
          文言は C# が L10n から入れる（ここの text は見本） -->
 
     <!-- ───────── 標準ヘッダー（トップバー） ───────── -->
@@ -29,6 +31,21 @@
         <ui:Button name="session-end" text="終了" class="dennoko-button-secondary" />
     </ui:VisualElement>
 
+    <!-- ───────── B3 プレビューカード（UV ビュー。範囲選択中だけ、スクロール領域の外に固定。
+                   ビュー自体のホイール・ドラッグとスクロールを重ねないため） ───────── -->
+    <ui:VisualElement name="uv-card" class="dennoko-card dennoko-preview-card dtx-uv-card">
+        <ui:VisualElement name="uv-host" class="dennoko-preview mm-uv-host">
+            <ui:VisualElement class="dennoko-preview__toolbar">
+                <ui:Button name="reset-view-button" class="dennoko-icon-button" />
+                <ui:Button name="base-overlay-button" class="dennoko-icon-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:Slider name="base-alpha-slider" low-value="0" high-value="1" show-input-field="true" class="mm-base-alpha" />
+        <ui:VisualElement class="dennoko-info-row">
+            <ui:Label name="uv-info" text="" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+
     <ui:ScrollView name="main-scroll" class="dennoko-scroll">
 
         <!-- B1 対象カード -->
@@ -51,12 +68,21 @@
                 <ui:DropdownField name="target-submesh" />
                 <ui:DropdownField name="target-uv" />
             </ui:VisualElement>
-            <!-- プレビューを入れるシェーダープロパティ（自動判別。必要なら差し替える） -->
-            <ui:VisualElement name="target-props">
-                <ui:DropdownField name="prop-base" label="BaseMap" />
-                <ui:DropdownField name="prop-normal" label="NormalMap" />
+            <!-- 詳細（作業中のみ）: プレビューを入れるシェーダープロパティとメッシュの情報 -->
+            <ui:VisualElement name="target-details" class="dennoko-details dennoko-details--collapsed">
+                <ui:VisualElement class="dennoko-details__header">
+                    <ui:Label text="▶" class="dennoko-details__arrow" />
+                    <ui:Label name="target-details-title" text="詳細" class="dennoko-details__title" />
+                    <ui:VisualElement name="target-details-chips" class="dennoko-details__chips" />
+                </ui:VisualElement>
+                <ui:VisualElement class="dennoko-details__content">
+                    <ui:VisualElement name="target-props">
+                        <ui:DropdownField name="prop-base" label="BaseMap" />
+                        <ui:DropdownField name="prop-normal" label="NormalMap" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="target-info" class="dennoko-info-row" />
+                </ui:VisualElement>
             </ui:VisualElement>
-            <ui:VisualElement name="target-info" class="dennoko-info-row" />
         </ui:VisualElement>
 
         <!-- 範囲選択の案内（範囲を選んでいる間だけ） -->
@@ -66,7 +92,7 @@
             <ui:VisualElement name="select-keys" class="dtx-keyhints" />
         </ui:VisualElement>
 
-        <!-- レイヤー一覧（上が最上段。最下段は下地） -->
+        <!-- レイヤー一覧（上が最上段。最下段は下地）。選択中のレイヤーの名前・ブレンド・不透明度もここで変える -->
         <ui:VisualElement name="layers-card" class="dennoko-card dtx-layers-card">
             <ui:VisualElement class="dennoko-card-header dennoko-card-header--row">
                 <ui:Label name="layers-header" text="レイヤー" class="dennoko-section-title dennoko-card-header__title" />
@@ -81,85 +107,94 @@
                 <ui:Label name="layers-empty-message" text="" class="dennoko-empty-state__message" />
                 <ui:Button name="layers-empty-action" text="範囲を選択" class="dennoko-button-secondary" />
             </ui:VisualElement>
+            <ui:VisualElement name="layer-props" class="dtx-layer-props">
+                <ui:VisualElement class="dennoko-hrow dtx-layer-props__row">
+                    <ui:TextField name="layer-name" class="dennoko-col-grow" />
+                    <ui:DropdownField name="layer-blend" class="dtx-layer-props__blend" />
+                </ui:VisualElement>
+                <ui:Slider name="layer-opacity" label="不透明度" low-value="0" high-value="1" show-input-field="true" />
+            </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- 選択中レイヤー: 基本とマスク -->
+        <!-- 選択中レイヤー: マスク（範囲の再調整 / マスク画像。細かい設定は詳細に畳む） -->
         <ui:VisualElement name="layer-card" class="dennoko-card dennoko-options-card">
             <ui:VisualElement class="dennoko-card-header dennoko-card-header--row">
-                <ui:Label name="layer-header" text="レイヤー設定" class="dennoko-section-title dennoko-card-header__title" />
+                <ui:Label name="layer-header" text="マスク" class="dennoko-section-title dennoko-card-header__title" />
             </ui:VisualElement>
-            <ui:TextField name="layer-name" label="名前" />
-            <ui:DropdownField name="layer-blend" label="ブレンド" />
-            <ui:Slider name="layer-opacity" label="不透明度" low-value="0" high-value="1" show-input-field="true" />
-            <ui:Label name="mask-title" text="マスク" class="dtx-subtitle" />
-            <ui:VisualElement class="dennoko-field-row">
-                <ui:Label name="mask-source-label" text="範囲" class="dennoko-field-row__label" />
-                <ui:Label name="mask-source" text="" class="dennoko-col-grow dtx-value-label" />
-                <ui:Button name="mask-reselect" text="再調整" class="dtx-row-action" />
-            </ui:VisualElement>
+            <ui:Button name="mask-reselect" text="範囲を再調整" class="dtx-reselect-button" />
+            <ui:Label name="mask-source" text="" class="dennoko-hint" />
             <uie:ObjectField name="mask-image" label="マスク画像" type="UnityEngine.Texture2D, UnityEngine.CoreModule" allow-scene-objects="false" />
-            <ui:Toggle name="mask-invert" text="反転" />
-            <ui:Slider name="mask-opacity" label="不透明度" low-value="0" high-value="1" show-input-field="true" />
-            <ui:Slider name="mask-feather" label="ぼかし" low-value="0" high-value="64" show-input-field="true" />
+            <ui:VisualElement name="mask-details" class="dennoko-details dennoko-details--collapsed">
+                <ui:VisualElement class="dennoko-details__header">
+                    <ui:Label text="▶" class="dennoko-details__arrow" />
+                    <ui:Label name="mask-details-title" text="詳細設定" class="dennoko-details__title" />
+                    <ui:VisualElement name="mask-details-chips" class="dennoko-details__chips" />
+                </ui:VisualElement>
+                <ui:VisualElement class="dennoko-details__content">
+                    <ui:Toggle name="mask-invert" text="反転" />
+                    <ui:Slider name="mask-opacity" label="不透明度" low-value="0" high-value="1" show-input-field="true" />
+                    <ui:Slider name="mask-feather" label="ぼかし" low-value="0" high-value="64" show-input-field="true" />
+                </ui:VisualElement>
+            </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- 選択中レイヤー: 質感（ベース + ノーマル） -->
+        <!-- 選択中レイヤー: 質感。色とテクスチャは両方効く（テクスチャ × 色）。
+             配置はテクスチャ欄のすぐ下に、テクスチャを入れた時だけ出す -->
         <ui:VisualElement name="material-card" class="dennoko-card dennoko-options-card">
             <ui:VisualElement class="dennoko-card-header dennoko-card-header--row">
                 <ui:Label name="material-header" text="質感" class="dennoko-section-title dennoko-card-header__title" />
             </ui:VisualElement>
-            <ui:VisualElement class="dennoko-field-row">
-                <ui:Label name="fill-label" text="ベース" class="dennoko-field-row__label" />
-                <ui:VisualElement name="fill-group" class="dennoko-segmented dennoko-choice-group">
-                    <ui:Button name="fill-color" text="単色" />
-                    <ui:Button name="fill-texture" text="テクスチャ" />
-                </ui:VisualElement>
-            </ui:VisualElement>
+
             <uie:ColorField name="base-color" label="色" show-alpha="true" />
             <uie:ObjectField name="base-texture" label="テクスチャ" type="UnityEngine.Texture2D, UnityEngine.CoreModule" allow-scene-objects="false" />
-            <uie:ColorField name="base-tint" label="Tint" show-alpha="true" />
-            <ui:VisualElement class="dennoko-field-row">
-                <ui:Label name="normal-label" text="ノーマル" class="dennoko-field-row__label" />
-                <ui:VisualElement name="normal-group" class="dennoko-segmented dennoko-choice-group">
-                    <ui:Button name="normal-none" text="なし" />
-                    <ui:Button name="normal-flatten" text="平坦化" />
-                    <ui:Button name="normal-texture" text="マップ" />
+            <!-- メインテクスチャの配置 -->
+            <ui:VisualElement name="base-placement" class="mm-indent dtx-placement">
+                <ui:VisualElement class="dennoko-field-row">
+                    <ui:Label name="placement-label" text="配置" class="dennoko-field-row__label" />
+                    <ui:VisualElement name="placement-group" class="dennoko-segmented dennoko-choice-group">
+                        <ui:Button name="placement-tiling" text="タイリング" />
+                        <ui:Button name="placement-decal" text="デカール" />
+                    </ui:VisualElement>
+                    <ui:Button name="placement-reset" class="dennoko-icon-button dtx-row-icon" />
+                </ui:VisualElement>
+                <ui:VisualElement name="tiling-group">
+                    <ui:Vector2Field name="base-tiling" label="タイリング" />
+                    <ui:Vector2Field name="base-offset" label="オフセット" />
+                    <ui:Slider name="base-rotation" label="回転" low-value="-180" high-value="180" show-input-field="true" />
+                </ui:VisualElement>
+                <ui:VisualElement name="decal-group">
+                    <ui:Vector2Field name="decal-center" label="位置（UV）" />
+                    <ui:Vector2Field name="decal-size" label="大きさ（UV）" />
+                    <ui:Slider name="decal-rotation" label="回転" low-value="-180" high-value="180" show-input-field="true" />
                 </ui:VisualElement>
             </ui:VisualElement>
-            <uie:ObjectField name="normal-map" label="ノーマルマップ" type="UnityEngine.Texture2D, UnityEngine.CoreModule" allow-scene-objects="false" />
-            <ui:Slider name="normal-scale" label="強さ" low-value="0" high-value="4" show-input-field="true" />
-        </ui:VisualElement>
 
-        <!-- 選択中レイヤー: 配置（タイリング / デカール） -->
-        <ui:VisualElement name="placement-card" class="dennoko-card dennoko-options-card">
-            <ui:VisualElement class="dennoko-card-header dennoko-card-header--row">
-                <ui:Label name="placement-header" text="配置" class="dennoko-section-title dennoko-card-header__title" />
-                <ui:Button name="placement-reset" class="dennoko-icon-button" />
-            </ui:VisualElement>
-            <ui:VisualElement class="dennoko-field-row">
-                <ui:Label name="placement-label" text="方式" class="dennoko-field-row__label" />
-                <ui:VisualElement name="placement-group" class="dennoko-segmented dennoko-choice-group">
-                    <ui:Button name="placement-tiling" text="タイリング" />
-                    <ui:Button name="placement-decal" text="デカール" />
+            <uie:ObjectField name="normal-map" label="ノーマル" type="UnityEngine.Texture2D, UnityEngine.CoreModule" allow-scene-objects="false" />
+            <!-- ノーマルの強さと配置（ノーマルマップを入れた時だけ） -->
+            <ui:VisualElement name="normal-options" class="mm-indent dtx-placement">
+                <ui:Slider name="normal-scale" label="強さ" low-value="0" high-value="4" show-input-field="true" />
+                <!-- ベースのテクスチャが無い時は、方式とデカールの位置もここで決める -->
+                <ui:VisualElement name="normal-mode-row" class="dennoko-field-row">
+                    <ui:Label name="normal-placement-label" text="配置" class="dennoko-field-row__label" />
+                    <ui:VisualElement name="normal-placement-group" class="dennoko-segmented dennoko-choice-group">
+                        <ui:Button name="normal-placement-tiling" text="タイリング" />
+                        <ui:Button name="normal-placement-decal" text="デカール" />
+                    </ui:VisualElement>
+                    <ui:Button name="normal-placement-reset" class="dennoko-icon-button dtx-row-icon" />
                 </ui:VisualElement>
-            </ui:VisualElement>
-            <ui:VisualElement name="tiling-group">
-                <ui:Vector2Field name="base-tiling" label="タイリング" />
-                <ui:Vector2Field name="base-offset" label="オフセット" />
-                <ui:Slider name="base-rotation" label="回転" low-value="-180" high-value="180" show-input-field="true" />
-                <ui:Toggle name="sync-normal" text="ノーマルも同じ配置にする" />
-                <ui:VisualElement name="normal-xform-group" class="mm-indent">
+                <ui:VisualElement name="normal-xform-group">
                     <ui:Vector2Field name="normal-tiling" label="タイリング" />
                     <ui:Vector2Field name="normal-offset" label="オフセット" />
                     <ui:Slider name="normal-rotation" label="回転" low-value="-180" high-value="180" show-input-field="true" />
                 </ui:VisualElement>
+                <ui:VisualElement name="normal-decal-group">
+                    <ui:Vector2Field name="normal-decal-center" label="位置（UV）" />
+                    <ui:Vector2Field name="normal-decal-size" label="大きさ（UV）" />
+                    <ui:Slider name="normal-decal-rotation" label="回転" low-value="-180" high-value="180" show-input-field="true" />
+                </ui:VisualElement>
+                <ui:Toggle name="sync-normal" text="ノーマルも同じ配置にする" />
             </ui:VisualElement>
-            <ui:VisualElement name="decal-group">
-                <ui:Vector2Field name="decal-center" label="位置（UV）" />
-                <ui:Vector2Field name="decal-size" label="大きさ（UV）" />
-                <ui:Slider name="decal-rotation" label="回転" low-value="-180" high-value="180" show-input-field="true" />
-                <ui:Label name="decal-hint" text="" class="dennoko-hint" />
-            </ui:VisualElement>
+            <ui:Toggle name="replace-normal" text="下地の凹凸を消す" />
         </ui:VisualElement>
 
         <!-- 下地（一覧で「下地」を選んでいる時） -->
@@ -186,46 +221,36 @@
             <uie:ObjectField name="bg-normal-map" label="NormalMap" type="UnityEngine.Texture2D, UnityEngine.CoreModule" allow-scene-objects="false" />
         </ui:VisualElement>
 
-        <!-- B3 プレビューカード（UV ビュー。見出しなし） -->
-        <ui:VisualElement name="uv-card" class="dennoko-card dennoko-preview-card">
-            <ui:VisualElement name="uv-host" class="dennoko-preview mm-uv-host">
-                <ui:VisualElement class="dennoko-preview__toolbar">
-                    <ui:Button name="reset-view-button" class="dennoko-icon-button" />
-                    <ui:Button name="base-overlay-button" class="dennoko-icon-button" />
-                </ui:VisualElement>
-            </ui:VisualElement>
-            <ui:Slider name="base-alpha-slider" low-value="0" high-value="1" show-input-field="true" class="mm-base-alpha" />
-            <ui:VisualElement class="dennoko-info-row">
-                <ui:Label name="uv-info" text="" />
-            </ui:VisualElement>
-        </ui:VisualElement>
-
-        <!-- B5 出力カード -->
-        <ui:VisualElement name="output-card" class="dennoko-card dennoko-output-card">
+        <!-- PSD（保存と読み込みだけ。PNG の解像度・ファイル名は出力ドック） -->
+        <ui:VisualElement name="psd-card" class="dennoko-card dennoko-output-card">
             <ui:VisualElement class="dennoko-card-header dennoko-card-header--row">
-                <ui:Label name="output-header" text="出力" class="dennoko-section-title dennoko-card-header__title" />
-            </ui:VisualElement>
-            <ui:VisualElement class="dennoko-field-row">
-                <ui:Label name="size-label" text="解像度" class="dennoko-field-row__label" />
-                <ui:VisualElement name="size-group" class="dennoko-segmented dennoko-choice-group">
-                    <ui:Button name="size-512" text="512" />
-                    <ui:Button name="size-1024" text="1024" />
-                    <ui:Button name="size-2048" text="2048" />
-                    <ui:Button name="size-4096" text="4096" />
-                </ui:VisualElement>
-            </ui:VisualElement>
-            <ui:TextField name="output-name" label="ファイル名" />
-            <ui:VisualElement class="dennoko-info-row">
-                <ui:Label name="output-info" text="" />
+                <ui:Label name="psd-header" text="PSD" class="dennoko-section-title dennoko-card-header__title" />
             </ui:VisualElement>
             <ui:VisualElement class="dennoko-hrow dtx-psd-row">
-                <ui:Button name="psd-export" text="PSD 出力" class="dennoko-col-grow" />
+                <ui:Button name="psd-export" text="PSD 保存" class="dennoko-col-grow" />
                 <ui:Button name="psd-import" text="PSD 読み込み" class="dennoko-col-grow" />
             </ui:VisualElement>
             <ui:Label name="psd-hint" text="" class="dennoko-hint" />
         </ui:VisualElement>
 
     </ui:ScrollView>
+
+    <!-- ───────── 出力ドック（作業中・範囲選択中以外。PNG 出力の解像度とファイル名） ───────── -->
+    <ui:VisualElement name="output-dock" class="dennoko-output dtx-output-dock">
+        <ui:VisualElement class="dennoko-output-row">
+            <ui:Label name="size-label" text="解像度" class="dennoko-output__label" />
+            <ui:VisualElement name="size-group" class="dennoko-segmented dennoko-choice-group">
+                <ui:Button name="size-512" text="512" />
+                <ui:Button name="size-1024" text="1024" />
+                <ui:Button name="size-2048" text="2048" />
+                <ui:Button name="size-4096" text="4096" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement class="dennoko-output-row">
+            <ui:Label name="output-name-label" text="ファイル名" class="dennoko-output__label" />
+            <ui:TextField name="output-name" />
+        </ui:VisualElement>
+    </ui:VisualElement>
 
     <!-- ───────── フッター（主ボタンは 1 つ。Idle = 作業開始 / 選択中 = 選択を確定 / それ以外 = PNG 出力） ───────── -->
     <ui:VisualElement name="footer" class="dennoko-footer">

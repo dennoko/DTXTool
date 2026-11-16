@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Dennoko.DTXTool.Core
 {
@@ -21,22 +22,6 @@ namespace Dennoko.DTXTool.Core
         Image = 1,
         /// <summary>PSD に埋め込まれていたラスター（メッシュが変わって選択を復元できなかった時の代わり）。</summary>
         Embedded = 2,
-    }
-
-    public enum FillKind
-    {
-        Color = 0,
-        Texture = 1,
-    }
-
-    public enum NormalKind
-    {
-        /// <summary>下のノーマルをそのまま通す。</summary>
-        None = 0,
-        /// <summary>平坦な法線へ置き換える。</summary>
-        Flatten = 1,
-        /// <summary>ノーマルマップを RNM で重ねる。</summary>
-        Texture = 2,
     }
 
     public enum PlacementMode
@@ -119,28 +104,42 @@ namespace Dennoko.DTXTool.Core
 
         public MaskSpec mask = new MaskSpec();
 
-        // ベース
-        public FillKind fillKind = FillKind.Color;
+        // ベース: テクスチャ × 色（テクスチャが無ければ色だけ）
         public Color color = Color.white;
         public TextureRef baseTexture = new TextureRef();
-        public Color tint = Color.white;
 
         // ノーマル
-        public NormalKind normalKind = NormalKind.None;
         public TextureRef normalTexture = new TextureRef();
         public float normalScale = 1f;
+        /// <summary>
+        /// 下地の凹凸を消す。テクスチャがあれば下のノーマルを置き換え、無ければ平坦にする。
+        /// false ならテクスチャを下のノーマルに RNM で重ねる。
+        /// </summary>
+        public bool replaceNormal;
 
         // 配置
         public PlacementMode placementMode = PlacementMode.Tiling;
         public UvTransform baseXform = new UvTransform();
-        public bool syncNormal = true;
+        public bool syncNormal;
         public UvTransform normalXform = new UvTransform();
         public Vector2 decalCenter = new Vector2(0.5f, 0.5f);
         public Vector2 decalSize = new Vector2(0.25f, 0.25f);
         public float decalRotation;
 
-        /// <summary>ノーマルに使う変形（同期している時はベースと同じ）。</summary>
-        public UvTransform EffectiveNormalXform => syncNormal ? baseXform : normalXform;
+        // 旧形式（ベースを「単色 / テクスチャ」、ノーマルを「なし / 平坦化 / マップ」で選んでいた頃）の値。
+        // メモリ上のドキュメントや Undo の履歴に旧形式のまま残っていた時だけ 0 以上になり、
+        // DocumentOps.MigrateLegacy が今の形へ直して -1 に戻す。
+        [FormerlySerializedAs("fillKind")] public int legacyFillKind = -1;
+        [FormerlySerializedAs("tint")] public Color legacyTint = Color.white;
+        [FormerlySerializedAs("normalKind")] public int legacyNormalKind = -1;
+
+        public bool HasBaseTexture => baseTexture != null && !baseTexture.IsEmpty;
+        public bool HasNormalTexture => normalTexture != null && !normalTexture.IsEmpty;
+        /// <summary>ノーマルの合成に関わるか（テクスチャがある、または下地の凹凸を消す）。</summary>
+        public bool AffectsNormal => HasNormalTexture || replaceNormal;
+
+        /// <summary>ノーマルに使う変形（ベースのテクスチャがあり、同じ配置にしている時はベースと同じ）。</summary>
+        public UvTransform EffectiveNormalXform => syncNormal && HasBaseTexture ? baseXform : normalXform;
 
         public static string NewId() => Guid.NewGuid().ToString("N");
     }

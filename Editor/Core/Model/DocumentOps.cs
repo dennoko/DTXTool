@@ -119,6 +119,64 @@ namespace Dennoko.DTXTool.Core
             doc.height = size;
         }
 
+        /// <summary>旧形式の値が残っているレイヤーを今の形へ直す。直したものがあれば true。</summary>
+        public static bool MigrateLegacy(DtxDocument doc)
+        {
+            bool changed = false;
+            if (doc?.layers == null) return false;
+            foreach (var l in doc.layers) changed |= MigrateLegacy(l);
+            return changed;
+        }
+
+        /// <summary>
+        /// 旧形式 → 今の形。
+        ///   ベース「単色」   : テクスチャは使っていなかったので外す
+        ///   ベース「テクスチャ」: Tint が色になる（テクスチャ × 色）
+        ///   ノーマル「なし」 : テクスチャを外す ／「平坦化」: テクスチャを外して凹凸を消す ／「マップ」: RNM で重ねる
+        /// </summary>
+        public static bool MigrateLegacy(Layer l)
+        {
+            if (l == null) return false;
+            bool changed = false;
+            if (l.legacyFillKind >= 0)
+            {
+                if (l.legacyFillKind == 0)
+                {
+                    // 旧形式は単色でも「同じ配置」ならベースの配置をノーマルに使っていた。
+                    // ベースのテクスチャが無いと同じ配置は効かなくなるので、ノーマル側へ写す
+                    if (l.syncNormal) l.normalXform = l.baseXform.Clone();
+                    l.syncNormal = false;
+                    l.baseTexture = new TextureRef();
+                }
+                else
+                {
+                    l.color = l.legacyTint;
+                }
+                l.legacyFillKind = -1;
+                changed = true;
+            }
+            if (l.legacyNormalKind >= 0)
+            {
+                switch (l.legacyNormalKind)
+                {
+                    case 0:
+                        l.normalTexture = new TextureRef();
+                        l.replaceNormal = false;
+                        break;
+                    case 1:
+                        l.normalTexture = new TextureRef();
+                        l.replaceNormal = true;
+                        break;
+                    default:
+                        l.replaceNormal = false;
+                        break;
+                }
+                l.legacyNormalKind = -1;
+                changed = true;
+            }
+            return changed;
+        }
+
         /// <summary>レイヤーが合成に寄与するか（非表示・不透明度 0 は飛ばす）。</summary>
         public static bool Contributes(Layer l) => l != null && l.visible && l.opacity > 0f && l.mask.opacity > 0f;
 

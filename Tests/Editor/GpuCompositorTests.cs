@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Dennoko.DTXTool.Core;
 using NUnit.Framework;
 using UnityEngine;
@@ -221,7 +221,6 @@ namespace Dennoko.DTXTool.Tests
             // sRGB テクスチャはリニアのプロジェクトで読むとリニア値になるが、合成はガンマ値で行うので元の値に戻っていること
             var doc = Doc(Color.black);
             var layer = AddLayer(doc, Color.white);
-            layer.fillKind = FillKind.Texture;
             layer.baseTexture = Register("tex", Solid(200, 100, 50, 255, linearTexture));
 
             _compositor.Render(doc, Size, _source);
@@ -234,9 +233,8 @@ namespace Dennoko.DTXTool.Tests
             var bg = new Color(0f, 0f, 0f, 1f);
             var doc = Doc(bg);
             var layer = AddLayer(doc, Color.white);
-            layer.fillKind = FillKind.Texture;
             layer.baseTexture = Register("tex", Solid(200, 200, 200, 128, false));
-            layer.tint = new Color(0.5f, 1f, 1f, 1f);
+            layer.color = new Color(0.5f, 1f, 1f, 1f);
 
             _compositor.Render(doc, Size, _source);
 
@@ -250,7 +248,6 @@ namespace Dennoko.DTXTool.Tests
             var bg = new Color(0.1f, 0.2f, 0.3f, 1f);
             var doc = Doc(bg);
             var layer = AddLayer(doc, Color.red);
-            layer.fillKind = FillKind.Texture;
             layer.baseTexture = new TextureRef { guid = "missing" };
 
             _compositor.Render(doc, Size, _source);
@@ -283,7 +280,6 @@ namespace Dennoko.DTXTool.Tests
             var tex = Make(2, 2, colors, true);
             var doc = Doc(Color.black);
             var layer = AddLayer(doc, Color.white);
-            layer.fillKind = FillKind.Texture;
             layer.baseTexture = Register("tex", tex);
 
             var cases = new[]
@@ -327,7 +323,6 @@ namespace Dennoko.DTXTool.Tests
             var bg = new Color(0f, 0f, 1f, 1f);
             var doc = Doc(bg);
             var layer = AddLayer(doc, Color.white);
-            layer.fillKind = FillKind.Texture;
             layer.baseTexture = Register("tex", Solid(255, 0, 0, 255, true));
             layer.placementMode = PlacementMode.Decal;
             layer.decalCenter = new Vector2(0.5f, 0.5f);
@@ -341,8 +336,13 @@ namespace Dennoko.DTXTool.Tests
             AssertColor(bg, BasePixel(8, 3), 1, "below the decal");
             AssertColor(bg, BasePixel(8, 12), 1, "above the decal");
 
-            // 単色のレイヤーはデカールにしてもマスク全体に効く（範囲はテクスチャにだけ意味がある）
-            layer.fillKind = FillKind.Color;
+            // 色はテクスチャに掛かる
+            layer.color = new Color(0.5f, 1f, 1f, 1f);
+            _compositor.Render(doc, Size, _source);
+            AssertColor(new Color(0.5f, 0f, 0f, 1f), BasePixel(8, 8), 1, "texture × color");
+
+            // テクスチャを外したレイヤーは、デカールにしてもマスク全体を色で塗る（範囲はテクスチャにだけ意味がある）
+            layer.baseTexture = new TextureRef();
             layer.color = Color.green;
             _compositor.Render(doc, Size, _source);
             AssertColor(Color.green, BasePixel(2, 8), 1);
@@ -368,7 +368,6 @@ namespace Dennoko.DTXTool.Tests
             doc.background.normalKind = BackgroundNormalKind.Texture;
             doc.background.normalTexture = Register("bgn", NormalTexture(nb));
             var layer = AddLayer(doc, Color.white);
-            layer.normalKind = NormalKind.Texture;
             layer.normalTexture = Register("ln", NormalTexture(nl));
             layer.opacity = 0.7f;
 
@@ -378,7 +377,6 @@ namespace Dennoko.DTXTool.Tests
             AssertNormal(expected, NormalPixel(9, 3));
 
             // ベースだけを持たないレイヤーでも、ノーマルは合成される
-            layer.fillKind = FillKind.Texture;
             layer.baseTexture = new TextureRef { guid = "missing" };
             _compositor.Render(doc, Size, _source);
             AssertNormal(expected, NormalPixel(9, 3));
@@ -390,10 +388,9 @@ namespace Dennoko.DTXTool.Tests
             var nl = new Vector3(0.5f, 0f, 0.85f);
             var doc = Doc(Color.white);
             var layer = AddLayer(doc, Color.white);
-            layer.normalKind = NormalKind.Texture;
             layer.normalTexture = Register("ln", NormalTexture(nl));
             layer.normalScale = 0.5f;
-            layer.baseXform = new UvTransform { rotation = 90f };
+            layer.normalXform = new UvTransform { rotation = 90f };
 
             _compositor.Render(doc, Size, _source);
 
@@ -411,7 +408,7 @@ namespace Dennoko.DTXTool.Tests
             doc.background.normalKind = BackgroundNormalKind.Texture;
             doc.background.normalTexture = Register("bgn", NormalTexture(nb));
             var layer = AddLayer(doc, Color.white);
-            layer.normalKind = NormalKind.Flatten;
+            layer.replaceNormal = true;
             _source.Masks[layer.id] = SplitMask(255, 0);
 
             _compositor.Render(doc, Size, _source);
@@ -421,6 +418,30 @@ namespace Dennoko.DTXTool.Tests
             layer.opacity = 0.5f;
             _compositor.Render(doc, Size, _source);
             AssertNormal(NormalMath.BlendFlatten(Quantized(nb), 0.5f), NormalPixel(3, 8));
+        }
+
+        [Test]
+        public void Normal_ReplaceDropsTheBumpsUnderneath()
+        {
+            // 「下地の凹凸を消す」+ ノーマルマップ = 置き換え（RNM と違い、下の凹凸が残らない）
+            var nb = new Vector3(0.3f, -0.2f, 0.9f);
+            var nl = new Vector3(-0.4f, 0.3f, 0.8f);
+            var doc = Doc(Color.white);
+            doc.background.normalKind = BackgroundNormalKind.Texture;
+            doc.background.normalTexture = Register("bgn", NormalTexture(nb));
+            var layer = AddLayer(doc, Color.white);
+            layer.normalTexture = Register("ln", NormalTexture(nl));
+            layer.replaceNormal = true;
+
+            _compositor.Render(doc, Size, _source);
+            AssertNormal(NormalMath.SafeNormalize(Quantized(nl)), NormalPixel(9, 3), 0.02f, "fully replaced");
+
+            layer.opacity = 0.6f;
+            _compositor.Render(doc, Size, _source);
+            AssertNormal(NormalMath.BlendReplace(Quantized(nb), Quantized(nl), 0.6f), NormalPixel(9, 3));
+            Assert.Greater(Vector3.Distance(NormalMath.BlendReplace(Quantized(nb), Quantized(nl), 1f),
+                                            NormalMath.BlendTexture(Quantized(nb), Quantized(nl), 1f)), 0.05f,
+                "replace and RNM give different results");
         }
 
         // ── Present / Raster / Pad ──
@@ -457,14 +478,13 @@ namespace Dennoko.DTXTool.Tests
             AssertColor(layer.color, new Color32(b[0], b[1], b[2], b[3]), 1, "not premultiplied, mask and opacity not applied");
             Assert.IsFalse(_compositor.RasterNormal(layer, _source, rt), "no normal on this layer");
 
-            layer.normalKind = NormalKind.Flatten;
+            layer.replaceNormal = true;
             Assert.IsTrue(_compositor.RasterNormal(layer, _source, rt));
             b = GpuReadback.ReadRGBA32(rt);
             Assert.AreEqual(128, b[0], 1);
             Assert.AreEqual(255, b[2], 1);
             Assert.AreEqual(255, b[3]);
 
-            layer.fillKind = FillKind.Texture;
             layer.baseTexture = new TextureRef { guid = "missing" };
             Assert.IsFalse(_compositor.RasterBase(layer, _source, rt));
         }

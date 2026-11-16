@@ -78,6 +78,10 @@ namespace Dennoko.DTXTool.Core
         public static Vector3 BlendTexture(Vector3 baseN, Vector3 layerN, float a)
             => SafeNormalize(Vector3.Lerp(baseN, Rnm(baseN, layerN), Mathf.Clamp01(a)));
 
+        /// <summary>ノーマルマップで置き換えるレイヤー（下地の凹凸を消す）: normalize(lerp(base, layer, a))。</summary>
+        public static Vector3 BlendReplace(Vector3 baseN, Vector3 layerN, float a)
+            => SafeNormalize(Vector3.Lerp(baseN, layerN, Mathf.Clamp01(a)));
+
         /// <summary>平坦化のレイヤー: normalize(lerp(base, (0,0,1), a))。</summary>
         public static Vector3 BlendFlatten(Vector3 baseN, float a)
             => SafeNormalize(Vector3.Lerp(baseN, Flat, Mathf.Clamp01(a)));

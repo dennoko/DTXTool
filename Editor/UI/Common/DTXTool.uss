@@ -252,6 +252,63 @@
     flex-basis: 0;
 }
 
+/* 範囲選択中の UV ビュー（スクロール領域の外に固定。縮めずに高さを決めておき、残りをスクロール領域に回す） */
+.dennoko-root .dennoko-card.dtx-uv-card {
+    flex-shrink: 0;
+    margin-top: 8px;
+}
+
+.dennoko-root .dtx-uv-card .dennoko-preview.mm-uv-host {
+    height: 260px;
+}
+
+/* レイヤー一覧の下の、選択中レイヤーの名前・ブレンド・不透明度 */
+.dennoko-root .dtx-layer-props {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top-width: 1px;
+    border-top-color: var(--dennoko-outline-subtle);
+}
+
+.dennoko-root .dtx-layer-props__row {
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.dennoko-root .dtx-layer-props__row > .unity-text-field {
+    margin-left: 0;
+}
+
+.dennoko-root .dtx-layer-props__row > .unity-base-popup-field.dtx-layer-props__blend {
+    flex-shrink: 0;
+    width: 104px;
+    margin-left: 4px;
+    margin-right: 0;
+}
+
+/* マスクカードの「範囲を再調整」（カードで一番よく押すので大きくする。主ボタンはフッターの 1 つだけなので白塗りにはしない） */
+.dennoko-root .unity-button.dtx-reselect-button {
+    height: 28px;
+    margin: 2px 0 6px 0;
+    -unity-font-style: bold;
+}
+
+/* テクスチャ欄の下の配置（字下げで、どのテクスチャの配置かを示す） */
+.dennoko-root .dtx-placement {
+    margin-bottom: 4px;
+}
+
+/* 方式の行の右端のアイコンボタン（初期値に戻す） */
+.dennoko-root .unity-button.dtx-row-icon {
+    flex-shrink: 0;
+    margin-left: 4px;
+}
+
+/* 出力ドックのラベル（「ファイル名」が入る幅にする） */
+.dennoko-root .dtx-output-dock .dennoko-output__label {
+    width: 56px;
+}
+
 /* フッターの「取消」は幅を固定し、主ボタンを伸ばす */
 .dennoko-root .dennoko-footer > .unity-button.dennoko-button-secondary {
     flex-shrink: 0;

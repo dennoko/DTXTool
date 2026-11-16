@@ -142,26 +142,25 @@ namespace Dennoko.DTXTool
             return true;
         }
 
-        /// <summary>テクスチャ指定なのに参照が切れているレイヤーは、ベースへ何も描かない。</summary>
+        /// <summary>テクスチャが無ければ色だけを塗る。テクスチャ指定なのに参照が切れているレイヤーは、ベースへ何も描かない。</summary>
         private static bool HasBase(Layer layer, ICompositeSource source, out Texture2D tex)
         {
             tex = null;
-            if (layer.fillKind == FillKind.Color) return true;
+            if (!layer.HasBaseTexture) return true;
             tex = source.Resolve(layer.baseTexture);
             return tex != null;
         }
 
+        /// <summary>
+        /// テクスチャがあれば重ねる / 置き換える、無ければ「下地の凹凸を消す」の時だけ平坦化する。
+        /// テクスチャ指定なのに参照が切れているレイヤーは、ノーマルへ何も描かない。
+        /// </summary>
         private static bool HasNormal(Layer layer, ICompositeSource source, out Texture2D tex)
         {
             tex = null;
-            switch (layer.normalKind)
-            {
-                case NormalKind.Flatten: return true;
-                case NormalKind.Texture:
-                    tex = source.Resolve(layer.normalTexture);
-                    return tex != null;
-                default: return false;
-            }
+            if (!layer.HasNormalTexture) return layer.replaceNormal;
+            tex = source.Resolve(layer.normalTexture);
+            return tex != null;
         }
 
         private void InitBase(Background bg, ICompositeSource source, RenderTexture dst)
@@ -199,9 +198,9 @@ namespace Dennoko.DTXTool
 
         private void SetBaseParams(Layer layer, Texture2D tex)
         {
-            bool useTex = layer.fillKind == FillKind.Texture && tex != null;
+            bool useTex = tex != null;
             _m.SetFloat(DtxShaderIds.UseTex, useTex ? 1f : 0f);
-            _m.SetVector(DtxShaderIds.Color, ToVector(useTex ? layer.tint : layer.color));
+            _m.SetVector(DtxShaderIds.Color, ToVector(layer.color));
             _m.SetTexture(DtxShaderIds.SrcTex, useTex ? (Texture)tex : Texture2D.whiteTexture);
             _m.SetFloat(DtxShaderIds.SrcSRGB, useTex && TextureInfo.SampledAsLinearized(tex) ? 1f : 0f);
             _m.SetFloat(DtxShaderIds.BlendMode, (float)layer.blendMode);
@@ -210,8 +209,8 @@ namespace Dennoko.DTXTool
 
         private void SetNormalParams(Layer layer, Texture2D tex)
         {
-            bool useTex = layer.normalKind == NormalKind.Texture && tex != null;
-            _m.SetFloat(DtxShaderIds.NormalMode, useTex ? 2f : 1f);
+            bool useTex = tex != null;
+            _m.SetFloat(DtxShaderIds.NormalMode, !useTex ? 1f : layer.replaceNormal ? 3f : 2f);
             _m.SetTexture(DtxShaderIds.SrcTex, useTex ? (Texture)tex : Texture2D.normalTexture);
             _m.SetFloat(DtxShaderIds.SrcSRGB, useTex && TextureInfo.SampledAsLinearized(tex) ? 1f : 0f);
             _m.SetFloat(DtxShaderIds.NormalPacked, useTex && TextureInfo.IsPackedNormal(tex) ? 1f : 0f);

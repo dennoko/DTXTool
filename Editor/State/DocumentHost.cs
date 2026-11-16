@@ -32,12 +32,21 @@ namespace Dennoko.DTXTool
 
         private void OnEnable()
         {
-            Undo.undoRedoPerformed += Touch;
+            // 更新前のメモリ上のドキュメントは旧形式のまま復元されるので、ここで今の形へ直す
+            DocumentOps.MigrateLegacy(Doc);
+            Undo.undoRedoPerformed += OnUndoRedo;
         }
 
         private void OnDisable()
         {
-            Undo.undoRedoPerformed -= Touch;
+            Undo.undoRedoPerformed -= OnUndoRedo;
+        }
+
+        /// <summary>更新前の Undo 履歴を戻すと旧形式の値が入ってくるので、直してから通知する。</summary>
+        private void OnUndoRedo()
+        {
+            DocumentOps.MigrateLegacy(Doc);
+            Touch();
         }
 
         // ── DocumentCommands からだけ呼ぶ ──
@@ -45,6 +54,7 @@ namespace Dennoko.DTXTool
         internal void SetDocument(DtxDocument doc, string key)
         {
             document = doc ?? new DtxDocument();
+            DocumentOps.MigrateLegacy(document);
             targetKey = key ?? string.Empty;
             if (selectedLayerId != BackgroundId && document.IndexOf(selectedLayerId) < 0)
                 selectedLayerId = document.layers.Count > 0 ? document.layers[document.layers.Count - 1].id : string.Empty;

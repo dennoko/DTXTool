@@ -47,8 +47,11 @@ namespace Dennoko.DTXTool.Tests
             if (_go != null) Object.DestroyImmediate(_go);
             if (_mesh != null) Object.DestroyImmediate(_mesh);
             if (_material != null) Object.DestroyImmediate(_material);
+            if (AssetDatabase.LoadAssetAtPath<Texture2D>(TempTexturePath) != null) AssetDatabase.DeleteAsset(TempTexturePath);
             SettingsService.ResetToLower(SettingKeys.Language);
         }
+
+        private const string TempTexturePath = "Assets/DtxUiTestTexture.asset";
 
         private static bool Shown(VisualElement root, string name)
         {
@@ -92,7 +95,9 @@ namespace Dennoko.DTXTool.Tests
             // Idle: 対象カードと主ボタンだけ
             Assert.IsFalse(Shown(root, "session-banner"));
             Assert.IsFalse(Shown(root, "layers-card"));
-            Assert.IsFalse(Shown(root, "output-card"));
+            Assert.IsFalse(Shown(root, "psd-card"));
+            Assert.IsFalse(Shown(root, "output-dock"));
+            Assert.IsFalse(Shown(root, "uv-card"));
             Assert.IsFalse(Shown(root, "select-card"));
             Assert.AreEqual(L10n.T("button.start"), root.Q<Button>("primary-button").text);
 
@@ -102,19 +107,27 @@ namespace Dennoko.DTXTool.Tests
             Assert.IsTrue(Shown(root, "session-banner"));
             Assert.IsTrue(Shown(root, "layers-card"));
             Assert.IsTrue(Shown(root, "layers-empty"), "empty state invites the first selection");
-            Assert.IsTrue(Shown(root, "output-card"));
-            Assert.IsTrue(Shown(root, "target-props"));
+            Assert.IsTrue(Shown(root, "psd-card"));
+            Assert.IsTrue(Shown(root, "output-dock"), "resolution and file name live above the footer");
+            Assert.IsTrue(root.Q("footer").ClassListContains("dennoko-footer--joined"));
+            Assert.IsFalse(Shown(root, "uv-card"), "the UV view is only shown while selecting");
+            Assert.IsTrue(Shown(root, "target-details"));
+            Assert.IsTrue(root.Q("target-details").ClassListContains("dennoko-details--collapsed"), "rarely used target settings are folded");
             Assert.IsFalse(Shown(root, "layer-card"));
+            Assert.IsFalse(Shown(root, "layer-props"));
             Assert.IsFalse(Shown(root, "secondary-button"));
             Assert.AreEqual(L10n.T("button.exportPng"), root.Q<Button>("primary-button").text);
             Assert.Greater(root.Q<DropdownField>("prop-base").choices.Count, 1, "shader properties are listed");
             StringAssert.Contains("_MainTex", root.Q<DropdownField>("prop-base").value);
 
-            // 範囲選択中
+            // 範囲選択中: UV ビューはスクロール領域の外（上）に固定
             DtxModeController.BeginSelectNew();
             root = Rebuild(window);
             Assert.IsTrue(Shown(root, "select-card"));
-            Assert.IsFalse(Shown(root, "output-card"), "only the current task is shown while selecting");
+            Assert.IsTrue(Shown(root, "uv-card"));
+            Assert.IsNull(root.Q("main-scroll").Q("uv-card"), "the UV view must not be inside the scroll view");
+            Assert.IsFalse(Shown(root, "psd-card"), "only the current task is shown while selecting");
+            Assert.IsFalse(Shown(root, "output-dock"));
             Assert.IsTrue(Shown(root, "secondary-button"));
             Assert.AreEqual(L10n.T("button.confirmSelection"), root.Q<Button>("primary-button").text);
             Assert.AreEqual(L10n.T("select.title.new"), root.Q<Label>("select-title").text);
@@ -124,34 +137,59 @@ namespace Dennoko.DTXTool.Tests
             Assert.IsTrue(DtxModeController.Confirm());
             root = Rebuild(window);
             Assert.IsFalse(Shown(root, "layers-empty"));
+            Assert.IsTrue(Shown(root, "layer-props"), "name / blend / opacity are edited in the layer list");
             Assert.IsTrue(Shown(root, "layer-card"));
             Assert.IsTrue(Shown(root, "material-card"));
-            Assert.IsFalse(Shown(root, "placement-card"), "placement only matters when a texture is used");
             Assert.IsFalse(Shown(root, "background-card"));
             Assert.AreEqual(2, root.Q("layer-list").childCount, "one layer row + the background row");
             var layer = DocumentHost.instance.SelectedLayer;
             Assert.AreEqual(layer.name, root.Q<TextField>("layer-name").value);
+            Assert.AreEqual(L10n.T("button.reselectArea"), root.Q<Button>("mask-reselect").text);
+            Assert.IsTrue(root.Q("mask-details").ClassListContains("dennoko-details--collapsed"), "mask options are folded");
+            // 色・テクスチャ・ノーマルの欄は常に出し、配置はテクスチャを入れた時だけ出す
             Assert.IsTrue(Shown(root, "base-color"));
-            Assert.IsFalse(Shown(root, "base-texture"));
-            Assert.IsTrue(root.Q<Button>("fill-color").ClassListContains("dennoko-button-active"), "the selected choice is marked");
+            Assert.IsTrue(Shown(root, "base-texture"));
+            Assert.IsTrue(Shown(root, "normal-map"));
+            Assert.IsTrue(Shown(root, "replace-normal"));
+            Assert.IsFalse(Shown(root, "base-placement"), "placement only matters when a texture is used");
+            Assert.IsFalse(Shown(root, "normal-options"));
             Assert.IsTrue(root.Q<Button>("size-2048").ClassListContains("dennoko-button-active"));
 
-            // テクスチャとデカール
+            // テクスチャとノーマル（タイリング）: それぞれの欄の下に配置が出る。同じ配置にするは既定でオフ
+            var tex = new Texture2D(4, 4);
+            AssetDatabase.CreateAsset(tex, TempTexturePath);
+            var texRef = TextureInfo.ToRef(tex);
             DocumentCommands.EditSelected("setup", l =>
             {
-                l.fillKind = FillKind.Texture;
-                l.normalKind = NormalKind.Texture;
-                l.placementMode = PlacementMode.Decal;
+                l.baseTexture = texRef;
+                l.normalTexture = texRef.Clone();
                 l.mask.feather = 8f / 2048f;
             });
             root = Rebuild(window);
-            Assert.IsTrue(Shown(root, "placement-card"));
+            Assert.IsTrue(Shown(root, "base-placement"));
+            Assert.IsTrue(Shown(root, "tiling-group"));
+            Assert.IsTrue(Shown(root, "normal-options"));
+            Assert.IsFalse(Shown(root, "normal-mode-row"), "the mode is chosen under the main texture");
+            Assert.IsTrue(Shown(root, "sync-normal"));
+            Assert.IsFalse(root.Q<Toggle>("sync-normal").value, "separate placement by default");
+            Assert.IsTrue(Shown(root, "normal-xform-group"));
+            Assert.AreEqual(8f, root.Q<Slider>("mask-feather").value, 0.01f, "feather is shown in pixels at the output size");
+
+            // デカール
+            DocumentCommands.EditSelected("decal", l => l.placementMode = PlacementMode.Decal);
+            root = Rebuild(window);
             Assert.IsTrue(Shown(root, "decal-group"));
             Assert.IsFalse(Shown(root, "tiling-group"));
-            Assert.IsTrue(Shown(root, "base-texture"));
-            Assert.IsTrue(Shown(root, "base-tint"));
-            Assert.IsTrue(Shown(root, "normal-scale"));
-            Assert.AreEqual(8f, root.Q<Slider>("mask-feather").value, 0.01f, "feather is shown in pixels at the output size");
+            Assert.IsFalse(Shown(root, "sync-normal"));
+            Assert.IsFalse(Shown(root, "normal-xform-group"));
+            Assert.IsFalse(Shown(root, "normal-decal-group"), "the decal is placed under the main texture");
+
+            // ノーマルだけ: 方式とデカールの位置はノーマル側に出る
+            DocumentCommands.EditSelected("normal only", l => l.baseTexture = new TextureRef());
+            root = Rebuild(window);
+            Assert.IsFalse(Shown(root, "base-placement"));
+            Assert.IsTrue(Shown(root, "normal-mode-row"));
+            Assert.IsTrue(Shown(root, "normal-decal-group"));
 
             // 下地を選ぶ
             DocumentCommands.Select(DocumentHost.BackgroundId);
@@ -188,6 +226,8 @@ namespace Dennoko.DTXTool.Tests
             Assert.AreEqual(0.2f, DocumentHost.instance.Doc.Find(layer.id).color.g, 1e-4f);
             root.Q<Vector2Field>("base-tiling").value = new Vector2(3f, 4f);
             Assert.AreEqual(new Vector2(3f, 4f), DocumentHost.instance.Doc.Find(layer.id).baseXform.tiling);
+            root.Q<Toggle>("replace-normal").value = true;
+            Assert.IsTrue(DocumentHost.instance.Doc.Find(layer.id).replaceNormal);
         }
 
         [Test]

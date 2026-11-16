@@ -58,6 +58,7 @@ namespace Dennoko.DTXTool
     /// <summary>
     /// レイヤー一覧のカード。上が最上段、最下段は下地（固定）。
     /// 行はクリックで選択。行の左の目で表示切替。追加・複製・順序・削除は見出し行のアイコンボタン。
+    /// 一覧の下に、選択中のレイヤーの名前・ブレンド・不透明度を置く（設定カードまでスクロールせずに変えられる）。
     /// 行は内容が変わった時だけ作り直す（スライダー操作のたびに作り直さない）。
     /// </summary>
     internal sealed class LayersCard
@@ -104,7 +105,46 @@ namespace Dennoko.DTXTool
                 LayerActions.AddImageMaskLayer(tex, MessageOrigin.Window);
             });
 
+            BindLayerProps(root);
             UiHub.Watch(card, Refresh);
+        }
+
+        private static readonly BlendMode[] BlendModes =
+            { BlendMode.Normal, BlendMode.Multiply, BlendMode.Additive, BlendMode.Screen, BlendMode.Overlay };
+
+        /// <summary>一覧の下: 選択中のレイヤーの名前・ブレンド・不透明度（レイヤーを選んでいる時だけ）。</summary>
+        private static void BindLayerProps(VisualElement root)
+        {
+            var props = root.Q("layer-props");
+
+            var name = root.Q<TextField>("layer-name");
+            name.tooltip = L10n.T("layer.name");
+            name.isDelayed = true;
+            DocBind.Layer(name, "undo.rename", l => l.name, (l, v) => l.name = string.IsNullOrWhiteSpace(v) ? l.name : v.Trim());
+
+            var blend = root.Q<DropdownField>("layer-blend");
+            blend.tooltip = L10n.T("layer.blend");
+            var labels = new List<string>();
+            foreach (var m in BlendModes) labels.Add(LayerInspector.BlendLabel(m));
+            blend.choices = labels;
+            blend.RegisterValueChangedCallback(e =>
+            {
+                if (e.target != blend || blend.index < 0) return;
+                var mode = BlendModes[blend.index];
+                DocumentCommands.EditSelected(L10n.T("undo.blend"), l => l.blendMode = mode);
+            });
+            UiHub.Watch(blend, () =>
+            {
+                var l = DocumentHost.instance.SelectedLayer;
+                if (l != null) blend.SetValueWithoutNotify(LayerInspector.BlendLabel(l.blendMode));
+            });
+
+            var opacity = root.Q<Slider>("layer-opacity");
+            opacity.label = L10n.T("layer.opacity");
+            DocBind.Layer(opacity, "undo.opacity", l => l.opacity, (l, v) => l.opacity = Mathf.Clamp01(v));
+
+            UiHub.Watch(props, () => Bind.Show(props,
+                SessionController.Current != null && DocumentHost.instance.SelectedLayer != null && DtxModeController.Mode != DtxMode.SelectNew));
         }
 
         private static Texture2D DraggedTexture()
@@ -147,8 +187,9 @@ namespace Dennoko.DTXTool
             foreach (var l in doc.layers)
             {
                 sb.Append(l.id).Append(':').Append(l.name).Append(':').Append(l.visible ? '1' : '0').Append(':')
-                  .Append((int)l.fillKind).Append(ColorUtility.ToHtmlStringRGB(l.fillKind == FillKind.Color ? l.color : l.tint)).Append(':')
-                  .Append(l.baseTexture.guid).Append(':').Append((int)l.blendMode).Append((int)l.mask.source).Append((int)l.normalKind).Append(';');
+                  .Append(ColorUtility.ToHtmlStringRGB(l.color)).Append(':')
+                  .Append(l.baseTexture.guid).Append(':').Append((int)l.blendMode).Append((int)l.mask.source)
+                  .Append(l.AffectsNormal ? '1' : '0').Append(';');
             }
             var bg = doc.background;
             sb.Append((int)bg.baseKind).Append(ColorUtility.ToHtmlStringRGB(bg.color)).Append(bg.baseTexture.guid).Append((int)bg.normalKind);
@@ -177,8 +218,7 @@ namespace Dennoko.DTXTool
             eye.RegisterCallback<ClickEvent>(e => e.StopPropagation());
             row.Add(eye);
 
-            row.Add(MakeSwatch(layer.fillKind == FillKind.Texture ? TextureInfo.Resolve(layer.baseTexture) : null,
-                layer.fillKind == FillKind.Color ? layer.color : layer.tint));
+            row.Add(MakeSwatch(layer.HasBaseTexture ? TextureInfo.Resolve(layer.baseTexture) : null, layer.color));
 
             var name = new Label(layer.name) { pickingMode = PickingMode.Ignore };
             name.AddToClassList("dennoko-candidate__name");
@@ -240,7 +280,7 @@ namespace Dennoko.DTXTool
             if (layer.blendMode != BlendMode.Normal) parts.Add(LayerInspector.BlendLabel(layer.blendMode));
             if (layer.mask.source == MaskSource.Image) parts.Add(L10n.T("mask.source.image"));
             else if (layer.mask.source == MaskSource.Embedded) parts.Add(L10n.T("mask.source.embedded"));
-            if (layer.normalKind != NormalKind.None) parts.Add("N");
+            if (layer.AffectsNormal) parts.Add("N");
             return string.Join(" · ", parts);
         }
     }
