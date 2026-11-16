@@ -19,8 +19,10 @@ namespace Dennoko.DTXTool
     internal sealed class DTXToolWindow : EditorWindow
     {
         public const string ToolName = "DTXTool";
-        public const string Version = "0.1.0";
+        // バージョンはツール直下の version.json（DTXToolVersion.Current）
 
+        private DennokoAppBar _appBar;
+        private Label _versionLabel;
         private DennokoStatus _status;
         private Button _statusAction;
         private string _statusAsset;
@@ -129,9 +131,9 @@ namespace Dennoko.DTXTool
 
         // ── 標準ヘッダー（トップバー） ──
 
-        private static void BindAppBar(VisualElement root)
+        private void BindAppBar(VisualElement root)
         {
-            var appBar = new DennokoAppBar(root, ToolName, english: !L10n.Japanese)
+            var appBar = _appBar = new DennokoAppBar(root, ToolName, english: !L10n.Japanese)
             {
                 AddToolMenuItems = menu =>
                 {
@@ -142,7 +144,60 @@ namespace Dennoko.DTXTool
             // 言語は SettingsService に持つ。切り替えると LanguageUi が中身ごと作り直す
             appBar.LanguageChanged += LanguageUi.SetEnglish;
             root.Q<Button>("appbar-settings").tooltip = L10n.T("tooltip.menu");
-            root.Q<Label>("version-label").text = "v" + Version;
+            root.Q<Button>("version-reload-button").tooltip = L10n.T("tooltip.reload");
+
+            // バージョン表示と更新チェック（GitHub の version.json と比べる。取得は DTXToolVersion が間隔を空けて行う）
+            _versionLabel = root.Q<Label>("version-label");
+            appBar.CheckUpdateRequested += () =>
+            {
+                DTXToolVersion.ForceRecheck();
+                LoadVersionResultFromSessionState(); // すぐ「確認中…」にする
+            };
+            LoadVersionResultFromSessionState();
+            DTXToolVersion.StartCheckBackgroundTask();
+        }
+
+        /// <summary>
+        /// 取得済みの最新版と今のローカル版から表示を作る（DTXToolVersion が取得後にも呼ぶ）。
+        /// 更新の有無は保存せず毎回比べ直す（ローカル版が後から読めた時に矛盾した表示を残さない）。
+        /// </summary>
+        internal void LoadVersionResultFromSessionState()
+        {
+            if (_versionLabel == null) return;
+            string local = DTXToolVersion.Current;
+            string latest = SessionState.GetString(DTXToolVersion.VerCheckLatestKey, string.Empty);
+            bool done = SessionState.GetBool(DTXToolVersion.VerCheckDoneKey, false);
+            bool error = SessionState.GetBool(DTXToolVersion.VerCheckErrorKey, false);
+            string url = SessionState.GetString(DTXToolVersion.VerCheckUrlKey, string.Empty);
+
+            string text = "v" + local;
+            bool update = false;
+            bool failed = false;
+            if (!done)
+            {
+                text += "  " + L10n.T("status.version.checking");
+            }
+            else if (error || string.IsNullOrEmpty(latest))
+            {
+                text += "  " + L10n.T("status.version.error");
+                failed = true;
+            }
+            else if (DennokoVersionChecker.IsUpdateAvailable(latest, local))
+            {
+                text += "  " + L10n.F("status.version.update", latest);
+                update = true;
+            }
+            _versionLabel.text = text;
+            _versionLabel.EnableInClassList("dennoko-version-label--update", update);
+            _versionLabel.EnableInClassList("dennoko-version-label--error", failed);
+
+            // 更新ありで配布ページ（version.json の url）がある時だけ、クリックで開く。GitHub への直接の導線は作らない
+            bool canOpen = update && !string.IsNullOrEmpty(url) && url.IndexOf("github.com", System.StringComparison.OrdinalIgnoreCase) < 0;
+            if (_appBar != null)
+            {
+                _appBar.ReleaseUrl = canOpen ? url : null;
+                _appBar.SetVersionClickable(canOpen, canOpen ? L10n.T("tooltip.openRelease") : null);
+            }
         }
 
         private static void OpenSettings(bool user)
