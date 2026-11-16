@@ -1,0 +1,48 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- S1 シーンツールバー（カプセル。skill blocks/sceneview.md）。アイコンのみ。名前とキーはツールチップ。
+         同じ位置をモードで差し替える（選択モード = 選択の単位 / ペイントモード = ペイントツール） -->
+    <ui:VisualElement name="capsule" class="dennoko-capsule">
+        <!-- レイヤーの調整中: 範囲選択を始めるボタンだけ -->
+        <ui:VisualElement name="seg-layer" class="dennoko-segment">
+            <ui:Button name="begin-select" class="dennoko-icon-button" />
+            <ui:Button name="begin-reselect" class="dennoko-icon-button" />
+        </ui:VisualElement>
+        <ui:VisualElement name="seg-mode" class="dennoko-segment">
+            <ui:Button name="mode-select" class="dennoko-icon-button" />
+            <ui:Button name="mode-paint" class="dennoko-icon-button" />
+        </ui:VisualElement>
+        <ui:VisualElement name="seg-units" class="dennoko-segment">
+            <ui:Button name="unit-island" text="島" class="dennoko-choice" />
+            <ui:Button name="unit-part" text="パーツ" class="dennoko-choice" />
+            <ui:Button name="unit-face" text="面" class="dennoko-choice" />
+        </ui:VisualElement>
+        <ui:VisualElement name="seg-tools" class="dennoko-segment">
+            <ui:Button name="tool-brush" class="dennoko-icon-button" />
+            <ui:Button name="tool-rect" class="dennoko-icon-button" />
+            <ui:Button name="tool-lasso" class="dennoko-icon-button" />
+            <ui:Button name="tool-eraser" class="dennoko-icon-button" />
+            <ui:Label name="brush-size" text="" class="dennoko-capsule__value" />
+        </ui:VisualElement>
+        <ui:VisualElement name="seg-symmetry" class="dennoko-segment">
+            <ui:Button name="symmetry" class="dennoko-icon-button" />
+        </ui:VisualElement>
+        <ui:VisualElement class="dennoko-segment">
+            <ui:Button name="xray" class="dennoko-icon-button" />
+            <ui:Button name="isolate" class="dennoko-icon-button" />
+        </ui:VisualElement>
+        <ui:VisualElement name="seg-pause" class="dennoko-segment">
+            <ui:Button name="pause" class="dennoko-icon-button" />
+        </ui:VisualElement>
+        <ui:VisualElement class="dennoko-segment">
+            <ui:Button name="undo" class="dennoko-icon-button" />
+            <ui:Button name="redo" class="dennoko-icon-button" />
+            <ui:Button name="clear" class="dennoko-icon-button" />
+        </ui:VisualElement>
+        <!-- 範囲を選んでいる間: 確定 / 取消 -->
+        <ui:VisualElement name="seg-confirm" class="dennoko-segment">
+            <ui:Button name="confirm" class="dennoko-icon-button" />
+            <ui:Button name="cancel" class="dennoko-icon-button" />
+        </ui:VisualElement>
+        <ui:Label name="count" text="" class="dennoko-capsule__count" />
+    </ui:VisualElement>
+</ui:UXML>

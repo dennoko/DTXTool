@@ -1,0 +1,258 @@
+/* DTXTool 固有クラス。DennokoTheme.uss → DennokoBlocks.uss の後に読む。
+   必ず .dennoko-root を前置する（skill references/uss-conventions.md）。色は var(--dennoko-*) のみ。
+   画面の部品はできるだけ skill のクラス（.dennoko-*）で組み、ここには skill に無いものだけを置く。 */
+
+.dennoko-root .mm-indent {
+    margin-left: 16px;
+}
+
+/* スクロール領域の最初のカードはトップバー / バナーから少し離す（.dennoko-card は上の余白が 0） */
+.dennoko-root .dennoko-scroll .dennoko-card.dennoko-target-card,
+.dennoko-root .dennoko-scroll.mm-layout-settings .dennoko-card {
+    margin-top: 8px;
+}
+
+/* ─── B1 対象カード ─── */
+
+/* 候補一覧の行の中のアイコン（Renderer の種類） */
+.dennoko-root .dennoko-candidate > .dennoko-icon {
+    flex-shrink: 0;
+}
+
+/* 候補一覧で今の対象として決めた行 */
+.dennoko-root .unity-button.dennoko-candidate.dennoko-button-active,
+.dennoko-root .unity-button.dennoko-candidate.dennoko-button-active:hover {
+    background-color: var(--dennoko-selection-bg);
+    border-color: var(--dennoko-selection-border);
+}
+
+/* ─── B3 UV ビュー ─── */
+
+/* .dennoko-preview は中身を中央に寄せる（align-items: center）ので、UV ビューは全面に広げる */
+.dennoko-root .dennoko-preview.mm-uv-host {
+    height: 320px;
+    min-height: 160px;
+    align-items: stretch;
+}
+
+.dennoko-root .mm-uv-view {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.dennoko-root .mm-uv-image {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* テクスチャをドラッグ中（ドロップで取り込み） */
+.dennoko-root .mm-uv-host.mm-drop-target {
+    border-color: var(--dennoko-selection-border);
+}
+
+.dennoko-root .mm-drop-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 45%;
+    -unity-text-align: middle-center;
+    color: var(--dennoko-selection-border);
+}
+
+.dennoko-root .mm-base-alpha {
+    margin-top: 4px;
+}
+
+/* ─── B5 出力カード ─── */
+
+.dennoko-root .mm-ext {
+    flex-shrink: 0;
+    margin-left: 4px;
+}
+
+/* Base PNG の大きさで解像度が決まっているとき（ボタンの右に実際の大きさ） */
+.dennoko-root .mm-size-locked {
+    flex-shrink: 0;
+    margin-left: 6px;
+    font-size: 10px;
+}
+
+/* チャンネルの R / G / B / A は文字の幅で並べる（伸ばさない） */
+.dennoko-root .dennoko-segmented.dennoko-choice-group.mm-channels {
+    align-self: flex-start;
+    margin-bottom: 2px;
+}
+
+.dennoko-root .dennoko-segmented.dennoko-choice-group.mm-channels > .unity-button {
+    flex-grow: 0;
+    flex-basis: auto;
+    min-width: 28px;
+}
+
+/* 上書きマーク ●（プロジェクトの既定から変えている。クリックで既定に戻す） */
+.dennoko-root .mm-override-dot {
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
+    margin-left: 4px;
+    margin-right: 4px;
+    border-radius: 4px;
+    background-color: var(--dennoko-selection-border);
+}
+
+/* ─── ステータス行（ステータス + 操作ボタン 1 つ。Label に子要素を足さないため横に並べる） ─── */
+
+.dennoko-root .mm-status-row {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.dennoko-root .mm-status-row > .dennoko-status {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+/* ステータスの下余白（6px）と揃える */
+.dennoko-root .mm-status-row > .unity-button.mm-status-action {
+    flex-shrink: 0;
+    min-height: 0;
+    height: 20px;
+    margin: 0 8px 6px -4px;
+    font-size: 10px;
+}
+
+/* ─── UV 展開図ウィンドウ（左: プレビュー、右: 設定） ─── */
+
+.dennoko-root .mm-layout-body {
+    flex-direction: row;
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+}
+
+.dennoko-root .dennoko-preview.mm-layout-preview {
+    flex-grow: 1;
+    height: auto;
+    min-width: 160px;
+    margin: 8px 0 8px 8px;
+}
+
+.dennoko-root .dennoko-scroll.mm-layout-settings {
+    flex-grow: 0;
+    width: 300px;
+}
+
+/* ラベル列（100px〜30%）だと 300px の設定欄では選択肢が窮屈なので狭める */
+.dennoko-root .mm-layout-settings .dennoko-field-row__label {
+    min-width: 72px;
+    width: 72px;
+}
+
+.dennoko-root .mm-layout-settings .dennoko-field-row {
+    margin-top: 2px;
+    margin-bottom: 2px;
+}
+
+/* ═══════════ DTXTool: レイヤー一覧・設定カード ═══════════ */
+
+/* 範囲選択の案内（範囲を選んでいる間だけ出るカード。作業中バナーと同じ selection 色で「今のモード」を示す） */
+.dennoko-root .dennoko-card.dtx-select-card {
+    border-color: var(--dennoko-selection-border);
+    background-color: var(--dennoko-selection-bg);
+}
+
+.dennoko-root .dtx-select-card__title {
+    color: var(--dennoko-text-primary);
+    -unity-font-style: bold;
+    margin-bottom: 2px;
+}
+
+.dennoko-root .dtx-keyhints {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 6px;
+}
+
+/* レイヤー一覧（上が最上段）。行は対象カードの候補行（.dennoko-candidate）と同じ見た目にする */
+.dennoko-root .dtx-layer-list {
+    flex-direction: column;
+}
+
+.dennoko-root .unity-button.dennoko-candidate.dtx-layer-row {
+    flex-shrink: 0;
+    margin-bottom: 2px;
+}
+
+/* 非表示のレイヤーは名前を薄くする */
+.dennoko-root .dtx-layer-row--hidden .dennoko-candidate__name {
+    color: var(--dennoko-text-disabled);
+}
+
+/* 下地の行は一覧の最下段に固定（上に区切り線） */
+.dennoko-root .unity-button.dennoko-candidate.dtx-layer-row--background {
+    margin-top: 4px;
+    margin-bottom: 0;
+}
+
+/* 行の左の目（表示切替）。下地の行は同じ幅の空きを置いて名前の位置を揃える */
+.dennoko-root .dtx-layer-row__eye {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin: 0 4px 0 0;
+}
+
+/* 質感の見本（色、またはテクスチャの縮小表示。色そのものはデータなので C# が入れる） */
+.dennoko-root .dtx-swatch {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-right: 6px;
+    border-width: 1px;
+    border-color: var(--dennoko-outline);
+    border-radius: 3px;
+}
+
+/* カードの中の小見出し（マスク など） */
+.dennoko-root .dtx-subtitle {
+    margin-top: 8px;
+    margin-bottom: 2px;
+    font-size: 10px;
+    color: var(--dennoko-text-tertiary);
+    -unity-font-style: bold;
+}
+
+/* ラベル付きの行の中の、値を示すだけの文字 */
+.dennoko-root .dtx-value-label {
+    -unity-text-align: middle-left;
+    color: var(--dennoko-text-secondary);
+}
+
+/* ラベル付きの行の右端の操作ボタン */
+.dennoko-root .unity-button.dtx-row-action {
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+
+/* PSD の出力 / 読み込み（2 つを同じ幅で並べる） */
+.dennoko-root .dtx-psd-row {
+    margin-top: 6px;
+}
+
+.dennoko-root .dtx-psd-row > .unity-button {
+    flex-basis: 0;
+}
+
+/* フッターの「取消」は幅を固定し、主ボタンを伸ばす */
+.dennoko-root .dennoko-footer > .unity-button.dennoko-button-secondary {
+    flex-shrink: 0;
+}

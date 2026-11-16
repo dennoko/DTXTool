@@ -1,0 +1,16 @@
+{
+    "name": "Dennoko.DTXTool.Core",
+    "rootNamespace": "Dennoko.DTXTool.Core",
+    "references": [],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
