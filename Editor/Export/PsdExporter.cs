@@ -268,6 +268,7 @@ namespace Dennoko.DTXTool
             {
                 Check(l.baseTexture, true);
                 Check(l.normalTexture, true);
+                Check(l.normalMask, true);
                 Check(l.mask.image, l.mask.source == MaskSource.Image);
             }
             return n;

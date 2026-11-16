@@ -134,6 +134,7 @@ Layer
 │    └─ invert, opacity, feather       feather はテクスチャ幅に対する比率（解像度非依存）
 ├─ color, baseTexture                  ベースは「テクスチャ × 色」（テクスチャが無ければ色だけ）
 ├─ normalTexture, normalScale, replaceNormal
+├─ normalMask                          ノーマルだけに掛けるマスク画像（空なら掛けない）
 └─ placementMode : Tiling | Decal
      ├─ baseXform（tiling, offset, rotation）, syncNormal（既定 false）, normalXform
      └─ decalCenter, decalSize, decalRotation
@@ -145,7 +146,7 @@ Layer
 - **旧形式（v0.1: `fillKind` / `tint` / `normalKind` で種類を選んでいた）からの移行**: `DocumentOps.MigrateLegacy` が今の形へ直す。
   呼ぶのは `DocumentCodec` の読み込み（末尾に `replaceNormal` が無いレイヤー）、`DocumentHost` の `OnEnable`・Undo / Redo・`SetDocument`
   （メモリ上のドキュメントや更新前の Undo 履歴は、`[FormerlySerializedAs]` で旧フィールドの値を `legacy*` に受ける）。
-  書き込みは旧形式の並びも保ったまま末尾に `replaceNormal` を足すので、古い DTXTool でもおおむね同じ見た目で読める。
+  書き込みは旧形式の並びも保ったまま末尾に `replaceNormal`、`normalMask` の順で足すので、古い DTXTool でもおおむね同じ見た目で読める。
 - ドキュメントの書き換え（追加・複製・削除・並べ替え・メッシュへの適合）は `DocumentOps` にあり、Undo を知らない純粋な操作としてテストしている。
 
 ---
@@ -300,7 +301,13 @@ n_layer     = normalize(n_layer)
 テクスチャあり・replaceNormal = true （置き換え）: out = normalize(lerp(n_dst, n_layer,             a))
 テクスチャなし・replaceNormal = true （平坦化）  : out = normalize(lerp(n_dst, (0,0,1),             a))
 テクスチャなし・replaceNormal = false            : このレイヤーの Normal パスを実行しない
+
+a = mask × opacity × Inside(layerUV) × normalMask(uv)    normalMask は輝度 × アルファ（指定が無ければ 1）
 ```
+
+- **ノーマル用マスク**（`normalMask`）はノーマルのパスにだけ掛かり、ベースには効かない。マスク画像（§5）と同じく UV 全体に対応し、
+  レイヤーのマスクに掛け合わせる。参照が切れている時は、そのレイヤーのノーマルを描かない（マスク画像の参照切れと同じ扱い）。
+  PSD では NormalMap フォルダのレイヤーのアルファに入れる（レイヤーマスクはベースと共通のまま）。
 
 - 既定の合成は **RNM（Reoriented Normal Mapping）＋正規化**。ブレンドモードは Base にだけ効く。
 - RNM は下地の凹凸を残す（ディテールを足す用途向き）。別の素材を貼るように下の凹凸を消したい時は「下地の凹凸を消す」で**置き換えの補間**にする。
@@ -490,7 +497,7 @@ UXML で骨組みを定義し、各カードのクラスは「ドキュメント
 │ マスク             ［範囲を再調整］（大きいボタン）・マスク画像               │
 │                    ▶ 詳細設定: 反転・不透明度・ぼかし                         │
 │ 質感               色 / テクスチャ（→ すぐ下に配置）/ ノーマル（→ すぐ下に強さと配置）│
-│                    □ 下地の凹凸を消す                                         │
+│                    □ 下地の凹凸を消す / ノーマルのマスク                      │
 │ 下地               一覧で下地を選んでいる時だけ                               │
 │ PSD                PSD 保存・PSD 読み込み                                     │
 ├─ 出力ドック ─────────────────────────────────────────────────────────────┤

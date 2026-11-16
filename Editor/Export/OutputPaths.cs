@@ -65,6 +65,7 @@ namespace Dennoko.DTXTool
             {
                 Add(l.baseTexture);
                 Add(l.normalTexture);
+                Add(l.normalMask);
                 Add(l.mask.image);
             }
             if (!used.Contains(path)) return path;

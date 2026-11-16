@@ -195,6 +195,8 @@
                 <ui:Toggle name="sync-normal" text="ノーマルも同じ配置にする" />
             </ui:VisualElement>
             <ui:Toggle name="replace-normal" text="下地の凹凸を消す" />
+            <!-- ノーマルだけに掛けるマスク（ノーマルに関わるレイヤーの時だけ） -->
+            <uie:ObjectField name="normal-mask" label="ノーマルのマスク" type="UnityEngine.Texture2D, UnityEngine.CoreModule" allow-scene-objects="false" />
         </ui:VisualElement>
 
         <!-- 下地（一覧で「下地」を選んでいる時） -->

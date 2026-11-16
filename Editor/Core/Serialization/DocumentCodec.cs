@@ -204,6 +204,7 @@ namespace Dennoko.DTXTool.Core
 
                 // ここから今の形式（これがあれば、上の種類は読まずに今の意味で読む）
                 c.Write(l.replaceNormal);
+                Write(c, l.normalMask ?? new TextureRef());
             });
         }
 
@@ -403,6 +404,7 @@ namespace Dennoko.DTXTool.Core
                 if (c.More)
                 {
                     l.replaceNormal = c.Bool();
+                    if (c.More) l.normalMask = c.Texture();
                 }
                 else
                 {

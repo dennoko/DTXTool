@@ -444,6 +444,34 @@ namespace Dennoko.DTXTool.Tests
                 "replace and RNM give different results");
         }
 
+        [Test]
+        public void Normal_MaskLimitsTheNormalOnlyAndBrokenMaskSkipsIt()
+        {
+            // ノーマル用マスクはノーマルだけを絞る（ベースは全面に塗られる）
+            var nl = new Vector3(-0.4f, 0.3f, 0.8f);
+            var doc = Doc(Color.black);
+            var layer = AddLayer(doc, Color.white);
+            layer.normalTexture = Register("ln", NormalTexture(nl));
+            layer.replaceNormal = true;
+            layer.normalMask = Register("nm", SplitMask(255, 0));
+
+            _compositor.Render(doc, Size, _source);
+            AssertNormal(NormalMath.SafeNormalize(Quantized(nl)), NormalPixel(3, 8), 0.02f, "inside the normal mask");
+            AssertNormal(NormalMath.Flat, NormalPixel(12, 8), 0.02f, "outside the normal mask");
+            AssertColor(Color.white, BasePixel(12, 8), 1, "the base ignores the normal mask");
+
+            // 灰色 = 不透明度と同じように効く
+            layer.normalMask = Register("nm", SplitMask(128, 128));
+            _compositor.Render(doc, Size, _source);
+            AssertNormal(NormalMath.BlendReplace(NormalMath.Flat, Quantized(nl), 128f / 255f), NormalPixel(9, 3));
+
+            // 参照切れ: ノーマルは描かない（ベースは描く）
+            layer.normalMask = new TextureRef { guid = "missing" };
+            _compositor.Render(doc, Size, _source);
+            AssertNormal(NormalMath.Flat, NormalPixel(3, 8), 0.01f, "broken mask");
+            AssertColor(Color.white, BasePixel(3, 8), 1);
+        }
+
         // ── Present / Raster / Pad ──
 
         [Test]

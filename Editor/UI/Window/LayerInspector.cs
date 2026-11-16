@@ -248,6 +248,11 @@ namespace Dennoko.DTXTool
             replace.text = L10n.T("normal.replace");
             replace.tooltip = L10n.T("tooltip.normalReplace");
             DocBind.Layer(replace, "undo.normal", l => l.replaceNormal, (l, v) => l.replaceNormal = v);
+
+            var normalMask = root.Q<ObjectField>("normal-mask");
+            normalMask.label = L10n.T("material.normalMask");
+            normalMask.tooltip = L10n.T("tooltip.normalMask");
+            DocBind.LayerTexture(normalMask, "undo.normal", l => l.normalMask, (l, v) => l.normalMask = v);
         }
 
         // ── 配置（メインテクスチャ・ノーマルそれぞれのテクスチャ欄の下） ──
@@ -396,6 +401,8 @@ namespace Dennoko.DTXTool
 
             // ノーマルの強さと配置。方式とデカールの位置は、ベースのテクスチャが無い時だけここで決める
             Bind.Show(_root.Q("normal-options"), normalTex);
+            // ノーマル用マスクは、ノーマルに何か描く時（または既に入れてある時）だけ出す
+            Bind.Show(_root.Q("normal-mask"), layer.AffectsNormal || layer.HasNormalMask);
             Bind.Show(_root.Q("normal-mode-row"), !baseTex);
             Bind.Show(_root.Q("normal-decal-group"), decal && !baseTex);
             // 「同じ配置にする」はベースのテクスチャをタイリングしている時だけ意味がある。オンなら個別の欄は隠す

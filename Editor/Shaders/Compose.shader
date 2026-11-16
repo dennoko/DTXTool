@@ -15,6 +15,8 @@ Shader "Hidden/DTXTool/Compose"
     sampler2D _DstTex;       // 下の累積結果
     sampler2D _MaskTex;      // レイヤーのマスク（.r）
     sampler2D _SrcTex;       // レイヤー / 下地のテクスチャ
+    sampler2D _NormalMaskTex; // ノーマルだけに掛けるマスク（輝度 × アルファ。無ければ白）
+    float _NormalMaskSRGB;   // 1 = sRGB のマスク画像をリニアのプロジェクトで読んでいる
     float4 _Color;           // 単色、または Tint（ガンマ値）
     float _UseTex;           // 1 = テクスチャ × Tint、0 = 単色
     float _SrcSRGB;          // 1 = sRGB テクスチャをリニアのプロジェクトで読んでいる（読んだ値をガンマ値へ戻す）
@@ -84,6 +86,14 @@ Shader "Hidden/DTXTool/Compose"
         }
         float len = length(n);
         return len > 1e-5 ? n / len : float3(0.0, 0.0, 1.0);
+    }
+
+    // ノーマル用マスクの値（LayerMask.shader の ImportImage と同じ読み方）
+    float NormalMaskAt(float2 uv)
+    {
+        float4 c = tex2D(_NormalMaskTex, uv);
+        if (_NormalMaskSRGB > 0.5) c.rgb = LinearToGammaExact(c.rgb);
+        return saturate(dot(c.rgb, float3(0.299, 0.587, 0.114)) * c.a);
     }
 
     float3 SafeNormalize(float3 n)
@@ -207,7 +217,7 @@ Shader "Hidden/DTXTool/Compose"
                 float2 luv = LayerUV(i.uv);
                 float2 dx = ddx(luv);
                 float2 dy = ddy(luv);
-                float a = saturate(tex2D(_MaskTex, i.uv).r * _Opacity * Inside(luv));
+                float a = saturate(tex2D(_MaskTex, i.uv).r * _Opacity * Inside(luv) * NormalMaskAt(i.uv));
                 float3 target;
                 if (_NormalMode < 1.5)
                 {
@@ -273,7 +283,7 @@ Shader "Hidden/DTXTool/Compose"
             ENDCG
         }
 
-        // 9: RasterNormal（PSD 用。レイヤーの法線を RGB で全面に描く）
+        // 9: RasterNormal（PSD 用。レイヤーの法線を RGB で全面に描く。ノーマル用マスクはアルファに入れる）
         Pass
         {
             CGPROGRAM
@@ -282,7 +292,7 @@ Shader "Hidden/DTXTool/Compose"
             float4 frag(v2f_img i) : SV_Target
             {
                 float2 luv = LayerUV(i.uv);
-                return float4(LayerNormal(luv, ddx(luv), ddy(luv)) * 0.5 + 0.5, Inside(luv));
+                return float4(LayerNormal(luv, ddx(luv), ddy(luv)) * 0.5 + 0.5, Inside(luv) * NormalMaskAt(i.uv));
             }
             ENDCG
         }

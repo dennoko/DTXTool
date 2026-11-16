@@ -105,6 +105,8 @@ namespace Dennoko.DTXTool
             { "material.normal", ("ノーマル", "Normal") },
             { "material.normalMap", ("ノーマルマップ", "Normal map") },
             { "material.normalScale", ("強さ", "Strength") },
+            { "material.normalMask", ("ノーマルのマスク", "Normal mask") },
+            { "tooltip.normalMask", ("ノーマルだけに掛けるマスク画像。白い所にだけノーマルが乗る（UV 全体に対応、輝度 × アルファ）。\nレイヤーのマスクと掛け合わせる。ベースには影響しない。", "Mask image applied to the normal only. The normal is drawn only where it is white (covers the whole UV, luminance × alpha).\nMultiplied with the layer mask. Does not affect the base.") },
             { "normal.none", ("なし", "None") },
             { "normal.flatten", ("平坦化", "Flatten") },
             { "normal.map", ("マップ", "Map") },

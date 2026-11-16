@@ -51,7 +51,7 @@ namespace Dennoko.DTXTool
                 {
                     if (!DocumentOps.Contributes(layer)) continue;
                     bool hasBase = HasBase(layer, source, out var baseTex);
-                    bool hasNormal = HasNormal(layer, source, out var normalTex);
+                    bool hasNormal = HasNormal(layer, source, out var normalTex, out var normalMask);
                     if (!hasBase && !hasNormal) continue;
 
                     var mask = source.MaskFor(layer, size);
@@ -69,7 +69,7 @@ namespace Dennoko.DTXTool
                         }
                         if (hasNormal)
                         {
-                            SetNormalParams(layer, normalTex);
+                            SetNormalParams(layer, normalTex, normalMask);
                             _m.SetTexture(DtxShaderIds.DstTex, _normalA);
                             Graphics.Blit(_gpu.Dummy, _normalB, _m, DtxShaderIds.BlendNormal);
                             (_normalA, _normalB) = (_normalB, _normalA);
@@ -134,9 +134,9 @@ namespace Dennoko.DTXTool
         /// <summary>PSD 用: レイヤーの法線を RGB で全面に描く。false = ノーマルを持たないレイヤー。</summary>
         public bool RasterNormal(Layer layer, ICompositeSource source, RenderTexture dst)
         {
-            if (!HasNormal(layer, source, out var tex)) return false;
+            if (!HasNormal(layer, source, out var tex, out var normalMask)) return false;
             var prev = RenderTexture.active;
-            SetNormalParams(layer, tex);
+            SetNormalParams(layer, tex, normalMask);
             Graphics.Blit(_gpu.Dummy, dst, _m, DtxShaderIds.RasterNormal);
             RenderTexture.active = prev;
             return true;
@@ -153,12 +153,20 @@ namespace Dennoko.DTXTool
 
         /// <summary>
         /// テクスチャがあれば重ねる / 置き換える、無ければ「下地の凹凸を消す」の時だけ平坦化する。
-        /// テクスチャ指定なのに参照が切れているレイヤーは、ノーマルへ何も描かない。
+        /// テクスチャやノーマル用マスクの指定があるのに参照が切れているレイヤーは、ノーマルへ何も描かない
+        /// （マスク画像の参照切れと同じく、塗る範囲が分からないので塗らない）。
         /// </summary>
-        private static bool HasNormal(Layer layer, ICompositeSource source, out Texture2D tex)
+        private static bool HasNormal(Layer layer, ICompositeSource source, out Texture2D tex, out Texture2D mask)
         {
             tex = null;
-            if (!layer.HasNormalTexture) return layer.replaceNormal;
+            mask = null;
+            if (!layer.AffectsNormal) return false;
+            if (layer.HasNormalMask)
+            {
+                mask = source.Resolve(layer.normalMask);
+                if (mask == null) return false;
+            }
+            if (!layer.HasNormalTexture) return true;
             tex = source.Resolve(layer.normalTexture);
             return tex != null;
         }
@@ -207,9 +215,11 @@ namespace Dennoko.DTXTool
             SetPlacement(layer, false, useTex);
         }
 
-        private void SetNormalParams(Layer layer, Texture2D tex)
+        private void SetNormalParams(Layer layer, Texture2D tex, Texture2D mask)
         {
             bool useTex = tex != null;
+            _m.SetTexture(DtxShaderIds.NormalMaskTex, mask != null ? (Texture)mask : Texture2D.whiteTexture);
+            _m.SetFloat(DtxShaderIds.NormalMaskSRGB, TextureInfo.SampledAsLinearized(mask) ? 1f : 0f);
             _m.SetFloat(DtxShaderIds.NormalMode, !useTex ? 1f : layer.replaceNormal ? 3f : 2f);
             _m.SetTexture(DtxShaderIds.SrcTex, useTex ? (Texture)tex : Texture2D.normalTexture);
             _m.SetFloat(DtxShaderIds.SrcSRGB, useTex && TextureInfo.SampledAsLinearized(tex) ? 1f : 0f);

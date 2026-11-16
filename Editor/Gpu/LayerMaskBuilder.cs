@@ -11,6 +11,8 @@ namespace Dennoko.DTXTool
         public static readonly int DstTex = Shader.PropertyToID("_DstTex");
         public static readonly int MaskTex = Shader.PropertyToID("_MaskTex");
         public static readonly int SrcTex = Shader.PropertyToID("_SrcTex");
+        public static readonly int NormalMaskTex = Shader.PropertyToID("_NormalMaskTex");
+        public static readonly int NormalMaskSRGB = Shader.PropertyToID("_NormalMaskSRGB");
         public static readonly int ValidTex = Shader.PropertyToID("_ValidTex");
         public static readonly int Color = Shader.PropertyToID("_Color");
         public static readonly int UseTex = Shader.PropertyToID("_UseTex");

@@ -29,6 +29,7 @@ namespace Dennoko.DTXTool.Tests
                 normalTexture = new TextureRef { guid = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", path = "Assets/Tex/cloth_n.png" },
                 normalScale = 1.5f,
                 replaceNormal = true,
+                normalMask = new TextureRef { guid = "cccccccccccccccccccccccccccccccc", path = "Assets/Tex/cloth_nmask.png" },
                 placementMode = PlacementMode.Decal,
                 baseXform = new UvTransform { tiling = new Vector2(4f, 2f), offset = new Vector2(0.25f, -0.5f), rotation = 30f },
                 syncNormal = false,
@@ -93,6 +94,7 @@ namespace Dennoko.DTXTool.Tests
             AssertSame(e.normalTexture, a.normalTexture);
             Assert.AreEqual(e.normalScale, a.normalScale);
             Assert.AreEqual(e.replaceNormal, a.replaceNormal);
+            AssertSame(e.normalMask, a.normalMask);
             Assert.AreEqual(-1, a.legacyFillKind, "decoded layers are always in the current form");
             Assert.AreEqual(-1, a.legacyNormalKind);
             Assert.AreEqual(e.placementMode, a.placementMode);

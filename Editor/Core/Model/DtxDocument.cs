@@ -116,6 +116,8 @@ namespace Dennoko.DTXTool.Core
         /// false ならテクスチャを下のノーマルに RNM で重ねる。
         /// </summary>
         public bool replaceNormal;
+        /// <summary>ノーマルだけに掛けるマスク画像（UV 全体に対応、輝度 × アルファ）。レイヤーのマスクに掛け合わせる。空なら掛けない。</summary>
+        public TextureRef normalMask = new TextureRef();
 
         // 配置
         public PlacementMode placementMode = PlacementMode.Tiling;
@@ -135,6 +137,7 @@ namespace Dennoko.DTXTool.Core
 
         public bool HasBaseTexture => baseTexture != null && !baseTexture.IsEmpty;
         public bool HasNormalTexture => normalTexture != null && !normalTexture.IsEmpty;
+        public bool HasNormalMask => normalMask != null && !normalMask.IsEmpty;
         /// <summary>ノーマルの合成に関わるか（テクスチャがある、または下地の凹凸を消す）。</summary>
         public bool AffectsNormal => HasNormalTexture || replaceNormal;
 
