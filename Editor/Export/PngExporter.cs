@@ -27,13 +27,13 @@ namespace Dennoko.DTXTool
                 string name = OutputPaths.BaseName(s);
                 string basePath = OutputPaths.AvoidReferenced(OutputPaths.BasePng(folder, name), doc);
                 string normalPath = OutputPaths.AvoidReferenced(OutputPaths.NormalPng(folder, name), doc);
+                bool baseIsNew = DtxTextureImport.IsNew(basePath);
+                bool normalIsNew = DtxTextureImport.IsNew(normalPath);
                 Write(basePath, bake.BaseRgba, bake.Size);
                 Write(normalPath, bake.NormalRgba, bake.Size);
 
-                DtxTexturePostprocessor.Register(basePath, DtxTexturePostprocessor.Kind.Base);
-                DtxTexturePostprocessor.Register(normalPath, DtxTexturePostprocessor.Kind.Normal);
-                AssetDatabase.ImportAsset(basePath, ImportAssetOptions.ForceUpdate);
-                AssetDatabase.ImportAsset(normalPath, ImportAssetOptions.ForceUpdate);
+                DtxTextureImport.Import(basePath, DtxTextureImport.Kind.Base, baseIsNew);
+                DtxTextureImport.Import(normalPath, DtxTextureImport.Kind.Normal, normalIsNew);
                 DocumentAutoSave.FlushPending();
 
                 var msg = new UserMessage
@@ -114,23 +114,31 @@ namespace Dennoko.DTXTool
     }
 
     /// <summary>
-    /// 本ツールが書いたパスの初回インポートだけに設定を当てる。
+    /// 出力 PNG をインポートし、新規作成したファイルにだけ初期設定を当てる。
     /// 再出力（上書き）では当て直さないので、後からユーザーが変えた設定は保たれる。
+    ///
+    /// AssetPostprocessor.OnPreprocessTexture は使わない。テクスチャ用 Postprocessor を登録すると
+    /// 全テクスチャのインポート依存が変わり、本ツールの導入・更新・削除のたびに
+    /// プロジェクト内の全テクスチャが再インポートされてしまうため。
     /// </summary>
-    internal sealed class DtxTexturePostprocessor : AssetPostprocessor
+    internal static class DtxTextureImport
     {
         public enum Kind { Base, Normal }
 
-        private static readonly Dictionary<string, Kind> Pending = new Dictionary<string, Kind>();
+        /// <summary>書き込み前に呼ぶ。.meta が無ければ新規ファイル（=初期設定を当てる対象）。</summary>
+        public static bool IsNew(string path) => !File.Exists(path + ".meta");
 
-        public static void Register(string path, Kind kind) => Pending[path] = kind;
-
-        private void OnPreprocessTexture()
+        public static void Import(string path, Kind kind, bool isNew)
         {
-            if (!Pending.TryGetValue(assetPath, out var kind)) return;
-            Pending.Remove(assetPath);
-            if (!assetImporter.importSettingsMissing) return;
-            var ti = (TextureImporter)assetImporter;
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            if (!isNew) return;
+            if (!(AssetImporter.GetAtPath(path) is TextureImporter ti)) return;
+            Apply(ti, kind);
+            ti.SaveAndReimport();
+        }
+
+        private static void Apply(TextureImporter ti, Kind kind)
+        {
             ti.mipmapEnabled = true;
             ti.streamingMipmaps = true;
             if (kind == Kind.Normal)
