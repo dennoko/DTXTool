@@ -144,7 +144,9 @@ namespace Dennoko.DTXTool
             // 言語は SettingsService に持つ。切り替えると LanguageUi が中身ごと作り直す
             appBar.LanguageChanged += LanguageUi.SetEnglish;
             root.Q<Button>("appbar-settings").tooltip = L10n.T("tooltip.menu");
-            root.Q<Button>("version-reload-button").tooltip = L10n.T("tooltip.reload");
+            // ここで例外が出ると後のバインド（作業終了ボタン・フッター）が丸ごと抜けるので、要素が無くても落ちないようにする
+            var reload = root.Q<Button>("version-reload-button");
+            if (reload != null) reload.tooltip = L10n.T("tooltip.reload");
 
             // バージョン表示と更新チェック（GitHub の version.json と比べる。取得は DTXToolVersion が間隔を空けて行う）
             _versionLabel = root.Q<Label>("version-label");
