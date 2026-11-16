@@ -132,6 +132,8 @@ namespace Dennoko.DTXTool
             { "tooltip.bgTexture", ("下地として読み込む既存の BaseMap", "Existing BaseMap used as the background") },
             { "tooltip.bgNormal", ("下地として読み込む既存の NormalMap", "Existing NormalMap used as the background") },
             { "output.name", ("ファイル名", "File name") },
+            { "output.overwrite", ("上書き", "Overwrite") },
+            { "tooltip.overwrite", ("オン: 同じ名前の PNG があれば上書きする。\nオフ: 同じ名前があれば、末尾に「 1」「 2」… と空いている番号を付けて別のファイルにする。", "On: overwrite PNGs with the same name.\nOff: if the name is taken, append the next free number (\" 1\", \" 2\", …) and write new files.") },
             { "output.psdHint", ("PSD には続きを再開するための情報が入ります。外部ソフトで上書き保存すると再開できなくなることがあるので、DTXTool が出力した PSD を残してください。", "The PSD carries the data needed to resume editing. Re-saving it in another app may drop that data, so keep the PSD exported by DTXTool.") },
             { "tooltip.outputName", ("出力ファイル名の先頭（空にすると対象の名前）。_BaseMap / _NormalMap が付きます。", "Prefix of the output files (empty = target name). _BaseMap / _NormalMap are appended.") },
             { "tooltip.exportPsd", ("BaseMap と NormalMap のレイヤーを 1 つの PSD に出力（続きの再開にも使えます）", "Export BaseMap and NormalMap layers into one PSD (also used to resume later)") },

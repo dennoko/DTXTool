@@ -123,6 +123,7 @@ namespace Dennoko.DTXTool
                 Bind.Show(root.Q("psd-card"), output);
                 Bind.Show(root.Q("output-dock"), output);
                 root.Q("footer").EnableInClassList("dennoko-footer--joined", output);
+                Bind.Show(root.Q("overwrite-output"), output);
             });
         }
 
@@ -197,6 +198,10 @@ namespace Dennoko.DTXTool
         {
             var primary = root.Q<Button>("primary-button");
             var secondary = root.Q<Button>("secondary-button");
+            var overwrite = root.Q<Toggle>("overwrite-output");
+            overwrite.text = L10n.T("output.overwrite");
+            overwrite.tooltip = L10n.T("tooltip.overwrite");
+            Bind.Toggle(overwrite, SettingKeys.OverwriteOutput);
             secondary.text = L10n.T("button.cancel");
             secondary.clicked += SessionCommands.CancelSelection;
             primary.clicked += () =>
@@ -378,9 +383,11 @@ namespace Dennoko.DTXTool
             {
                 var s = SessionController.Current;
                 if (s == null) return;
-                string n = OutputPaths.BaseName(s);
-                name.tooltip = L10n.T("tooltip.outputName") + "\n" + OutputPaths.FolderFor(s) + "/\n"
-                               + n + OutputPaths.BaseSuffix + ".png\n" + n + OutputPaths.NormalSuffix + ".png";
+                string folder = OutputPaths.FolderFor(s);
+                var (basePath, normalPath) = OutputPaths.PngPaths(folder, OutputPaths.BaseName(s),
+                    DocumentHost.instance.Doc, SettingsService.Get(SettingKeys.OverwriteOutput));
+                name.tooltip = L10n.T("tooltip.outputName") + "\n" + folder + "/\n"
+                               + Path.GetFileName(basePath) + "\n" + Path.GetFileName(normalPath);
             });
 
             var export = root.Q<Button>("psd-export");

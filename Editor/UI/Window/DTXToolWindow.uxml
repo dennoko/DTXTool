@@ -256,6 +256,8 @@
 
     <!-- ───────── フッター（主ボタンは 1 つ。Idle = 作業開始 / 選択中 = 選択を確定 / それ以外 = PNG 出力） ───────── -->
     <ui:VisualElement name="footer" class="dennoko-footer">
+        <!-- PNG 出力の上書き（出力できる時だけ。オフなら空いている番号を付ける） -->
+        <ui:Toggle name="overwrite-output" text="上書き" class="dtx-footer-toggle" />
         <ui:Button name="secondary-button" text="取消" class="dennoko-button-secondary" />
         <ui:Button name="primary-button" text="作業開始" class="dennoko-button-primary" />
     </ui:VisualElement>

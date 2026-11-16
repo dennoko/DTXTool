@@ -46,10 +46,54 @@ namespace Dennoko.DTXTool
         public static string NormalPng(string folder, string name) => folder + "/" + name + NormalSuffix + ".png";
 
         /// <summary>
+        /// 実際に書く BaseMap / NormalMap のパス。
+        /// overwrite = true: 同じ名前のファイルがあっても上書きする（ドキュメントが読んでいるテクスチャだけは避ける）。
+        /// overwrite = false: どちらかが既にあれば、両方の末尾に「 1」「 2」… と同じ番号を付け、どちらも無い番号にする。
+        /// </summary>
+        public static (string basePath, string normalPath) PngPaths(string folder, string name, Dennoko.DTXTool.Core.DtxDocument doc, bool overwrite)
+        {
+            string basePath = BasePng(folder, name);
+            string normalPath = NormalPng(folder, name);
+            if (overwrite) return (AvoidReferenced(basePath, doc), AvoidReferenced(normalPath, doc));
+
+            var used = Referenced(doc);
+            bool Free(string p) => !used.Contains(p) && !File.Exists(p) && !Directory.Exists(p);
+            if (Free(basePath) && Free(normalPath)) return (basePath, normalPath);
+            for (int i = 1; ; i++)
+            {
+                string b = Numbered(basePath, i);
+                string n = Numbered(normalPath, i);
+                if (Free(b) && Free(n)) return (b, n);
+            }
+        }
+
+        /// <summary>拡張子の前に「 番号」を付ける（a/b_BaseMap.png → a/b_BaseMap 1.png）。</summary>
+        public static string Numbered(string path, int number)
+        {
+            string dir = Path.GetDirectoryName(path).Replace('\\', '/');
+            return dir + "/" + Path.GetFileNameWithoutExtension(path) + " " + number + Path.GetExtension(path);
+        }
+
+        /// <summary>
         /// ドキュメントが参照しているテクスチャ（下地など）と同じパスには書かない。
         /// 自分の入力を上書きすると、出力するたびにレイヤーが重なっていくため、名前に _2, _3 … を足して避ける。
         /// </summary>
         public static string AvoidReferenced(string path, Dennoko.DTXTool.Core.DtxDocument doc)
+        {
+            var used = Referenced(doc);
+            if (!used.Contains(path)) return path;
+            string dir = Path.GetDirectoryName(path).Replace('\\', '/');
+            string name = Path.GetFileNameWithoutExtension(path);
+            string ext = Path.GetExtension(path);
+            for (int i = 2; ; i++)
+            {
+                string candidate = dir + "/" + name + "_" + i + ext;
+                if (!used.Contains(candidate)) return candidate;
+            }
+        }
+
+        /// <summary>ドキュメントが読んでいるテクスチャのパス。</summary>
+        private static System.Collections.Generic.HashSet<string> Referenced(Dennoko.DTXTool.Core.DtxDocument doc)
         {
             var used = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             void Add(Dennoko.DTXTool.Core.TextureRef r)
@@ -68,15 +112,7 @@ namespace Dennoko.DTXTool
                 Add(l.normalMask);
                 Add(l.mask.image);
             }
-            if (!used.Contains(path)) return path;
-            string dir = Path.GetDirectoryName(path).Replace('\\', '/');
-            string name = Path.GetFileNameWithoutExtension(path);
-            string ext = Path.GetExtension(path);
-            for (int i = 2; ; i++)
-            {
-                string candidate = dir + "/" + name + "_" + i + ext;
-                if (!used.Contains(candidate)) return candidate;
-            }
+            return used;
         }
 
         public static string Sanitize(string name)

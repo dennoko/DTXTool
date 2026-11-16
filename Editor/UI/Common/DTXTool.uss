@@ -313,3 +313,9 @@
 .dennoko-root .dennoko-footer > .unity-button.dennoko-button-secondary {
     flex-shrink: 0;
 }
+
+/* フッターの「上書き」チェックボックス（主ボタンの左。縮めない） */
+.dennoko-root .dennoko-footer > .dtx-footer-toggle {
+    flex-shrink: 0;
+    margin: 0 8px 0 2px;
+}

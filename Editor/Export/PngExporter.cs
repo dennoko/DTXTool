@@ -25,8 +25,7 @@ namespace Dennoko.DTXTool
                 EditorUtility.DisplayProgressBar("DTXTool", L10n.T("status.writing"), 0.8f);
                 string folder = OutputPaths.ResolveFolder(s);
                 string name = OutputPaths.BaseName(s);
-                string basePath = OutputPaths.AvoidReferenced(OutputPaths.BasePng(folder, name), doc);
-                string normalPath = OutputPaths.AvoidReferenced(OutputPaths.NormalPng(folder, name), doc);
+                var (basePath, normalPath) = OutputPaths.PngPaths(folder, name, doc, SettingsService.Get(SettingKeys.OverwriteOutput));
                 bool baseIsNew = DtxTextureImport.IsNew(basePath);
                 bool normalIsNew = DtxTextureImport.IsNew(normalPath);
                 Write(basePath, bake.BaseRgba, bake.Size);

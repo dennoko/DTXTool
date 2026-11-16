@@ -40,6 +40,25 @@ namespace Dennoko.DTXTool.Tests
             string key = TargetKey.For(_renderer);
             if (Directory.Exists(StoragePaths.TargetDir(key))) Directory.Delete(StoragePaths.TargetDir(key), true);
             DocumentCommands.ResetForTarget(string.Empty, new DtxDocument());
+            // 利用者のプロジェクト設定に左右されないよう、出力の設定を既定に固定する（TearDown で戻す）
+            _savedSettings.Clear();
+            Pin(SettingKeys.OverwriteOutput, false);
+            Pin(SettingKeys.UseTextureFolder, true);
+        }
+
+        private readonly System.Collections.Generic.List<System.Action> _savedSettings = new System.Collections.Generic.List<System.Action>();
+
+        /// <summary>プロジェクト設定をテストの間だけ value にする（元が既定のままなら、戻す時に値を消す）。</summary>
+        private void Pin(Setting<bool> s, bool value)
+        {
+            bool was = SettingsService.Get(s);
+            bool stored = SettingsService.IsOverridden(s);
+            _savedSettings.Add(() =>
+            {
+                if (stored) SettingsService.Set(s, was);
+                else SettingsService.ResetToLower(s);
+            });
+            if (was != value) SettingsService.Set(s, value);
         }
 
         [TearDown]
@@ -51,6 +70,8 @@ namespace Dennoko.DTXTool.Tests
             AssetDatabase.DeleteAsset(TempDir);
             if (File.Exists(_psdPath)) File.Delete(_psdPath);
             PreviewRecoveryJournal.Clear();
+            foreach (var restore in _savedSettings) restore();
+            _savedSettings.Clear();
         }
 
         /// <summary>四角形 A = UV の左半分（三角形 0, 1）、四角形 B = 右半分（三角形 2, 3）。</summary>
@@ -494,7 +515,55 @@ namespace Dennoko.DTXTool.Tests
 
             SessionCommands.ExportPng(MessageOrigin.Window);
             Assert.AreEqual(before, new FileInfo(clash).Length, "the background texture is left alone");
+            Assert.IsTrue(File.Exists(TempDir + "/DtxTestTarget_BaseMap 1.png"), "not overwriting: the next free number");
+            Assert.IsTrue(File.Exists(TempDir + "/DtxTestTarget_NormalMap 1.png"), "the pair shares the number");
+
+            // 上書きでも、ドキュメントが読んでいるテクスチャには書かない
+            SettingsService.Set(SettingKeys.OverwriteOutput, true);
+            SessionCommands.ExportPng(MessageOrigin.Window);
+            Assert.AreEqual(before, new FileInfo(clash).Length, "the background texture is left alone");
             Assert.IsTrue(File.Exists(TempDir + "/DtxTestTarget_BaseMap_2.png"));
+        }
+
+        [Test]
+        public void ExportPng_NumbersNewFilesUnlessOverwriteIsOn()
+        {
+            // 元のテクスチャと同じフォルダ（テスト用の一時フォルダ。TearDown で消える）へ出力させる
+            string originalPath = TempDir + "/Original.png";
+            File.WriteAllBytes(originalPath, new Texture2D(4, 4).EncodeToPNG());
+            AssetDatabase.ImportAsset(originalPath);
+            _material.SetTexture("_MainTex", AssetDatabase.LoadAssetAtPath<Texture2D>(originalPath));
+            {
+                var s = Start();
+                AddRedLayer(s, 0, 1);
+                string folder = OutputPaths.FolderFor(s);
+                Assert.AreEqual(TempDir, folder);
+                string baseName = OutputPaths.BaseName(s);
+                string first = OutputPaths.BasePng(folder, baseName);
+                string normal = OutputPaths.NormalPng(folder, baseName);
+
+                SessionCommands.ExportPng(MessageOrigin.Window);
+                Assert.IsTrue(File.Exists(first), first);
+
+                // オフ（既定）: 2 回目以降は「 1」「 2」… の空いている番号
+                SessionCommands.ExportPng(MessageOrigin.Window);
+                SessionCommands.ExportPng(MessageOrigin.Window);
+                Assert.IsTrue(File.Exists(OutputPaths.Numbered(first, 1)));
+                Assert.IsTrue(File.Exists(OutputPaths.Numbered(normal, 1)));
+                Assert.IsTrue(File.Exists(OutputPaths.Numbered(first, 2)));
+
+                // NormalMap だけ残っていても、組で同じ番号になるよう飛ばす
+                AssetDatabase.DeleteAsset(OutputPaths.Numbered(first, 2));
+                var (b, n) = OutputPaths.PngPaths(folder, baseName, DocumentHost.instance.Doc, false);
+                Assert.AreEqual(OutputPaths.Numbered(first, 3), b);
+                Assert.AreEqual(OutputPaths.Numbered(normal, 3), n);
+
+                // オン: 同じ名前に書く
+                SettingsService.Set(SettingKeys.OverwriteOutput, true);
+                SessionCommands.ExportPng(MessageOrigin.Window);
+                Assert.IsFalse(File.Exists(OutputPaths.Numbered(first, 3)), "overwrite does not add a number");
+                Assert.AreEqual((first, normal), OutputPaths.PngPaths(folder, baseName, DocumentHost.instance.Doc, true));
+            }
         }
 
         [Test]
