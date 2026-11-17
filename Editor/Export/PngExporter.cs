@@ -13,6 +13,13 @@ namespace Dennoko.DTXTool
         public static void Export(WorkSession s, MessageOrigin origin)
         {
             if (s == null) return;
+            bool exportBase = SettingsService.Get(SettingKeys.ExportBaseMap);
+            bool exportNormal = SettingsService.Get(SettingKeys.ExportNormalMap);
+            if (!exportBase && !exportNormal)
+            {
+                Notifier.Post(MessageLevel.Warning, L10n.T("status.noExportTarget"), origin);
+                return;
+            }
             var injector = s.Injector;
             try
             {
@@ -20,32 +27,43 @@ namespace Dennoko.DTXTool
                 // ベイクと書き込みの間はプレビューを外しておく（保存処理と競合させない）
                 injector.Suspend();
                 var doc = DocumentHost.instance.Doc;
-                var bake = TextureBaker.Bake(s, doc);
+                var bake = TextureBaker.Bake(s, doc, exportBase, exportNormal);
 
                 EditorUtility.DisplayProgressBar("DTXTool", L10n.T("status.writing"), 0.8f);
                 string folder = OutputPaths.ResolveFolder(s);
                 string name = OutputPaths.BaseName(s);
-                var (basePath, normalPath) = OutputPaths.PngPaths(folder, name, doc, SettingsService.Get(SettingKeys.OverwriteOutput));
-                bool baseIsNew = DtxTextureImport.IsNew(basePath);
-                bool normalIsNew = DtxTextureImport.IsNew(normalPath);
-                Write(basePath, bake.BaseRgba, bake.Size);
-                Write(normalPath, bake.NormalRgba, bake.Size);
-
-                DtxTextureImport.Import(basePath, DtxTextureImport.Kind.Base, baseIsNew);
-                DtxTextureImport.Import(normalPath, DtxTextureImport.Kind.Normal, normalIsNew);
+                var (basePath, normalPath) = OutputPaths.PngPaths(folder, name, doc,
+                    SettingsService.Get(SettingKeys.OverwriteOutput), exportBase, exportNormal);
+                string outBase = exportBase ? basePath : null;
+                string outNormal = exportNormal ? normalPath : null;
+                if (exportBase)
+                {
+                    bool baseIsNew = DtxTextureImport.IsNew(outBase);
+                    Write(outBase, bake.BaseRgba, bake.Size);
+                    DtxTextureImport.Import(outBase, DtxTextureImport.Kind.Base, baseIsNew);
+                }
+                if (exportNormal)
+                {
+                    bool normalIsNew = DtxTextureImport.IsNew(outNormal);
+                    Write(outNormal, bake.NormalRgba, bake.Size);
+                    DtxTextureImport.Import(outNormal, DtxTextureImport.Kind.Normal, normalIsNew);
+                }
                 DocumentAutoSave.FlushPending();
 
+                string statusText = exportBase && exportNormal
+                    ? L10n.F("status.exported", Path.GetFileName(outBase), Path.GetFileName(outNormal))
+                    : L10n.F("status.exportedSingle", Path.GetFileName(outBase ?? outNormal));
                 var msg = new UserMessage
                 {
                     Level = MessageLevel.Success,
-                    Text = L10n.F("status.exported", Path.GetFileName(basePath), Path.GetFileName(normalPath)),
+                    Text = statusText,
                     Origin = origin,
-                    AssetPath = basePath,
+                    AssetPath = outBase ?? outNormal,
                 };
-                if (injector.Active && !AlreadyApplied(injector, basePath, normalPath))
+                if (injector.Active && !AlreadyApplied(injector, outBase, outNormal))
                 {
                     msg.ActionLabel = L10n.T("term.apply");
-                    msg.Action = _ => ApplyToMaterial(s, basePath, normalPath, origin);
+                    msg.Action = _ => ApplyToMaterial(s, outBase, outNormal, origin);
                 }
                 Notifier.Post(msg);
             }
@@ -69,8 +87,8 @@ namespace Dennoko.DTXTool
 
         private static bool AlreadyApplied(PreviewInjector injector, string basePath, string normalPath)
         {
-            bool baseOk = injector.BaseProperty == null || AssetDatabase.GetAssetPath(injector.OriginalBase) == basePath;
-            bool normalOk = injector.NormalProperty == null || AssetDatabase.GetAssetPath(injector.OriginalNormal) == normalPath;
+            bool baseOk = basePath == null || injector.BaseProperty == null || AssetDatabase.GetAssetPath(injector.OriginalBase) == basePath;
+            bool normalOk = normalPath == null || injector.NormalProperty == null || AssetDatabase.GetAssetPath(injector.OriginalNormal) == normalPath;
             return baseOk && normalOk;
         }
 
@@ -83,8 +101,8 @@ namespace Dennoko.DTXTool
             var injector = s?.Injector;
             if (injector == null || !injector.Active) return;
             var material = injector.Material;
-            var baseTex = AssetDatabase.LoadAssetAtPath<Texture2D>(basePath);
-            var normalTex = AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
+            var baseTex = string.IsNullOrEmpty(basePath) ? null : AssetDatabase.LoadAssetAtPath<Texture2D>(basePath);
+            var normalTex = string.IsNullOrEmpty(normalPath) ? null : AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
 
             injector.Suspend();
             try

@@ -309,6 +309,26 @@
     width: 56px;
 }
 
+/* 解像度行の右のスペースに出力対象チェックボックスを並べる（狭い幅では折り返す） */
+.dennoko-root .dtx-output-size-row {
+    flex-wrap: wrap;
+}
+
+.dennoko-root .dtx-output-targets {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.dennoko-root .dtx-output-targets > .unity-toggle {
+    margin-right: 8px;
+}
+
+.dennoko-root .dtx-output-targets > .unity-toggle:last-child {
+    margin-right: 0;
+}
+
 /* フッターの「取消」は幅を固定し、主ボタンを伸ばす */
 .dennoko-root .dennoko-footer > .unity-button.dennoko-button-secondary {
     flex-shrink: 0;

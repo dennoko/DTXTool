@@ -240,13 +240,17 @@
 
     <!-- ───────── 出力ドック（作業中・範囲選択中以外。PNG 出力の解像度とファイル名） ───────── -->
     <ui:VisualElement name="output-dock" class="dennoko-output dtx-output-dock">
-        <ui:VisualElement class="dennoko-output-row">
+        <ui:VisualElement class="dennoko-output-row dtx-output-size-row">
             <ui:Label name="size-label" text="解像度" class="dennoko-output__label" />
             <ui:VisualElement name="size-group" class="dennoko-segmented dennoko-choice-group">
                 <ui:Button name="size-512" text="512" />
                 <ui:Button name="size-1024" text="1024" />
                 <ui:Button name="size-2048" text="2048" />
                 <ui:Button name="size-4096" text="4096" />
+            </ui:VisualElement>
+            <ui:VisualElement class="dtx-output-targets">
+                <ui:Toggle name="export-base" text="ベース" />
+                <ui:Toggle name="export-normal" text="ノーマル" />
             </ui:VisualElement>
         </ui:VisualElement>
         <ui:VisualElement class="dennoko-output-row">

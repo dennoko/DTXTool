@@ -272,10 +272,13 @@ namespace Dennoko.DTXTool
                 bool working = UiRules.Working;
                 bool selecting = working && DtxModeController.IsSelecting;
                 bool canStart = TargetCard.PendingTarget != null;
+                bool canExport = SettingsService.Get(SettingKeys.ExportBaseMap) || SettingsService.Get(SettingKeys.ExportNormalMap);
                 primary.text = !working ? L10n.T("button.start") : selecting ? L10n.T("button.confirmSelection") : L10n.T("button.exportPng");
-                primary.SetEnabled(working || canStart);
+                primary.SetEnabled(working ? (selecting || canExport) : canStart);
                 // 押せない理由はツールチップに出す
-                primary.tooltip = working || canStart ? string.Empty : L10n.T("tooltip.chooseTarget");
+                if (!working && !canStart) primary.tooltip = L10n.T("tooltip.chooseTarget");
+                else if (working && !selecting && !canExport) primary.tooltip = L10n.T("tooltip.chooseExportTarget");
+                else primary.tooltip = string.Empty;
                 Bind.Show(secondary, selecting);
             });
         }
@@ -434,17 +437,30 @@ namespace Dennoko.DTXTool
             DocBind.Choice(sizes, () => DocumentHost.instance.Doc.width,
                 v => DocumentCommands.Edit(L10n.T("undo.resolution"), d => DocumentOps.SetSize(d, v)));
 
+            var exportBase = root.Q<Toggle>("export-base");
+            exportBase.text = L10n.T("output.exportBase");
+            exportBase.tooltip = L10n.T("tooltip.exportBase");
+            Bind.Toggle(exportBase, SettingKeys.ExportBaseMap);
+
+            var exportNormal = root.Q<Toggle>("export-normal");
+            exportNormal.text = L10n.T("output.exportNormal");
+            exportNormal.tooltip = L10n.T("tooltip.exportNormal");
+            Bind.Toggle(exportNormal, SettingKeys.ExportNormalMap);
+
             var name = root.Q<TextField>("output-name");
             Bind.Text(name, SettingKeys.OutputName, () => OutputPaths.BaseName(SessionController.Current));
             UiHub.Watch(name, () =>
             {
                 var s = SessionController.Current;
                 if (s == null) return;
+                bool eb = SettingsService.Get(SettingKeys.ExportBaseMap);
+                bool en = SettingsService.Get(SettingKeys.ExportNormalMap);
                 string folder = OutputPaths.FolderFor(s);
                 var (basePath, normalPath) = OutputPaths.PngPaths(folder, OutputPaths.BaseName(s),
-                    DocumentHost.instance.Doc, SettingsService.Get(SettingKeys.OverwriteOutput));
-                name.tooltip = L10n.T("tooltip.outputName") + "\n" + folder + "/\n"
-                               + Path.GetFileName(basePath) + "\n" + Path.GetFileName(normalPath);
+                    DocumentHost.instance.Doc, SettingsService.Get(SettingKeys.OverwriteOutput), eb, en);
+                string files = (eb ? "\n" + Path.GetFileName(basePath) : string.Empty)
+                             + (en ? "\n" + Path.GetFileName(normalPath) : string.Empty);
+                name.tooltip = L10n.T("tooltip.outputName") + "\n" + folder + "/" + files;
             });
 
             var export = root.Q<Button>("psd-export");

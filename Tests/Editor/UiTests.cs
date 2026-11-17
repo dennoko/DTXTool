@@ -49,6 +49,8 @@ namespace Dennoko.DTXTool.Tests
             if (_material != null) Object.DestroyImmediate(_material);
             if (AssetDatabase.LoadAssetAtPath<Texture2D>(TempTexturePath) != null) AssetDatabase.DeleteAsset(TempTexturePath);
             SettingsService.ResetToLower(SettingKeys.Language);
+            SettingsService.ResetToLower(SettingKeys.ExportBaseMap);
+            SettingsService.ResetToLower(SettingKeys.ExportNormalMap);
         }
 
         private const string TempTexturePath = "Assets/DtxUiTestTexture.asset";
@@ -109,6 +111,12 @@ namespace Dennoko.DTXTool.Tests
             Assert.IsTrue(Shown(root, "layers-empty"), "empty state invites the first selection");
             Assert.IsTrue(Shown(root, "psd-card"));
             Assert.IsTrue(Shown(root, "output-dock"), "resolution and file name live above the footer");
+            var exportBaseToggle = root.Q<Toggle>("export-base");
+            var exportNormalToggle = root.Q<Toggle>("export-normal");
+            Assert.IsNotNull(exportBaseToggle);
+            Assert.IsNotNull(exportNormalToggle);
+            Assert.IsTrue(exportBaseToggle.value);
+            Assert.IsTrue(exportNormalToggle.value);
             Assert.IsTrue(root.Q("footer").ClassListContains("dennoko-footer--joined"));
             Assert.IsFalse(Shown(root, "uv-card"), "the UV view is only shown while selecting");
             Assert.IsTrue(Shown(root, "target-details"));

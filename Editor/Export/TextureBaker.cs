@@ -48,7 +48,7 @@ namespace Dennoko.DTXTool
             return Mathf.Clamp(p, 0, 64);
         }
 
-        public static BakeResult Bake(WorkSession s, DtxDocument doc)
+        public static BakeResult Bake(WorkSession s, DtxDocument doc, bool bakeBase = true, bool bakeNormal = true)
         {
             int size = Mathf.Clamp(doc.width, 16, 8192);
             var gpu = s.Gpu;
@@ -57,12 +57,12 @@ namespace Dennoko.DTXTool
             using (var compositor = new Compositor(gpu))
             {
                 compositor.Render(doc, size, source);
-                return Finish(s, compositor, size);
+                return Finish(s, compositor, size, bakeBase, bakeNormal);
             }
         }
 
         /// <summary>合成済みの Compositor からエッジ拡張 → 読み戻し。</summary>
-        public static BakeResult Finish(WorkSession s, Compositor compositor, int size)
+        public static BakeResult Finish(WorkSession s, Compositor compositor, int size, bool bakeBase = true, bool bakeNormal = true)
         {
             var gpu = s.Gpu;
             int padding = EffectivePadding(size);
@@ -70,16 +70,26 @@ namespace Dennoko.DTXTool
             try
             {
                 coverage = s.Renderer.Masks.RasterCoverage(size);
-                paddedBase = Pad(gpu, compositor.BaseResult, coverage, padding, RenderTextureFormat.ARGB32);
-                paddedNormal = Pad(gpu, compositor.NormalResult, coverage, padding, RenderTextureFormat.ARGBHalf);
-                encoded = gpu.CreateRT("BakeNormal", size, size, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear,
-                    FilterMode.Point, TextureWrapMode.Clamp);
-                compositor.EncodeNormal(paddedNormal, encoded);   // 拡張した後で正規化して 8bit にする
+                byte[] baseRgba = null;
+                byte[] normalRgba = null;
+                if (bakeBase)
+                {
+                    paddedBase = Pad(gpu, compositor.BaseResult, coverage, padding, RenderTextureFormat.ARGB32);
+                    baseRgba = GpuReadback.ReadRGBA32(paddedBase);
+                }
+                if (bakeNormal)
+                {
+                    paddedNormal = Pad(gpu, compositor.NormalResult, coverage, padding, RenderTextureFormat.ARGBHalf);
+                    encoded = gpu.CreateRT("BakeNormal", size, size, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear,
+                        FilterMode.Point, TextureWrapMode.Clamp);
+                    compositor.EncodeNormal(paddedNormal, encoded);   // 拡張した後で正規化して 8bit にする
+                    normalRgba = GpuReadback.ReadRGBA32(encoded);
+                }
                 return new BakeResult
                 {
                     Size = size,
-                    BaseRgba = GpuReadback.ReadRGBA32(paddedBase),
-                    NormalRgba = GpuReadback.ReadRGBA32(encoded),
+                    BaseRgba = baseRgba,
+                    NormalRgba = normalRgba,
                 };
             }
             finally

@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using Dennoko.DTXTool.Core;
 using NUnit.Framework;
 using UnityEditor;
@@ -44,6 +44,8 @@ namespace Dennoko.DTXTool.Tests
             _savedSettings.Clear();
             Pin(SettingKeys.OverwriteOutput, false);
             Pin(SettingKeys.UseTextureFolder, true);
+            Pin(SettingKeys.ExportBaseMap, true);
+            Pin(SettingKeys.ExportNormalMap, true);
         }
 
         private readonly System.Collections.Generic.List<System.Action> _savedSettings = new System.Collections.Generic.List<System.Action>();
@@ -564,6 +566,43 @@ namespace Dennoko.DTXTool.Tests
                 Assert.IsFalse(File.Exists(OutputPaths.Numbered(first, 3)), "overwrite does not add a number");
                 Assert.AreEqual((first, normal), OutputPaths.PngPaths(folder, baseName, DocumentHost.instance.Doc, true));
             }
+        }
+
+        [Test]
+        public void ExportPng_RespectsBaseAndNormalTargetSettings()
+        {
+            string originalPath = TempDir + "/Original.png";
+            File.WriteAllBytes(originalPath, new Texture2D(4, 4).EncodeToPNG());
+            AssetDatabase.ImportAsset(originalPath);
+            _material.SetTexture("_MainTex", AssetDatabase.LoadAssetAtPath<Texture2D>(originalPath));
+
+            var s = Start();
+            AddRedLayer(s, 0, 1);
+            string basePath = TempDir + "/DtxTestTarget_BaseMap.png";
+            string normalPath = TempDir + "/DtxTestTarget_NormalMap.png";
+
+            // Base のみ出力
+            SettingsService.Set(SettingKeys.ExportBaseMap, true);
+            SettingsService.Set(SettingKeys.ExportNormalMap, false);
+            SessionCommands.ExportPng(MessageOrigin.Window);
+            Assert.IsTrue(File.Exists(basePath), basePath);
+            Assert.IsFalse(File.Exists(normalPath), normalPath);
+
+            // Normal のみ出力（上書きオンで同じ名前を確認）
+            SettingsService.Set(SettingKeys.OverwriteOutput, true);
+            SettingsService.Set(SettingKeys.ExportBaseMap, false);
+            SettingsService.Set(SettingKeys.ExportNormalMap, true);
+            SessionCommands.ExportPng(MessageOrigin.Window);
+            Assert.IsTrue(File.Exists(normalPath), normalPath);
+
+            // 両方オフなら出力しない
+            AssetDatabase.DeleteAsset(basePath);
+            AssetDatabase.DeleteAsset(normalPath);
+            SettingsService.Set(SettingKeys.ExportBaseMap, false);
+            SettingsService.Set(SettingKeys.ExportNormalMap, false);
+            SessionCommands.ExportPng(MessageOrigin.Window);
+            Assert.IsFalse(File.Exists(basePath), basePath);
+            Assert.IsFalse(File.Exists(normalPath), normalPath);
         }
 
         [Test]

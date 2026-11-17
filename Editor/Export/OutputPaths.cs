@@ -50,7 +50,7 @@ namespace Dennoko.DTXTool
         /// overwrite = true: 同じ名前のファイルがあっても上書きする（ドキュメントが読んでいるテクスチャだけは避ける）。
         /// overwrite = false: どちらかが既にあれば、両方の末尾に「 1」「 2」… と同じ番号を付け、どちらも無い番号にする。
         /// </summary>
-        public static (string basePath, string normalPath) PngPaths(string folder, string name, Dennoko.DTXTool.Core.DtxDocument doc, bool overwrite)
+        public static (string basePath, string normalPath) PngPaths(string folder, string name, Dennoko.DTXTool.Core.DtxDocument doc, bool overwrite, bool exportBase = true, bool exportNormal = true)
         {
             string basePath = BasePng(folder, name);
             string normalPath = NormalPng(folder, name);
@@ -58,12 +58,14 @@ namespace Dennoko.DTXTool
 
             var used = Referenced(doc);
             bool Free(string p) => !used.Contains(p) && !File.Exists(p) && !Directory.Exists(p);
-            if (Free(basePath) && Free(normalPath)) return (basePath, normalPath);
+            bool BaseOk(string p) => !exportBase || Free(p);
+            bool NormalOk(string p) => !exportNormal || Free(p);
+            if (BaseOk(basePath) && NormalOk(normalPath)) return (basePath, normalPath);
             for (int i = 1; ; i++)
             {
                 string b = Numbered(basePath, i);
                 string n = Numbered(normalPath, i);
-                if (Free(b) && Free(n)) return (b, n);
+                if (BaseOk(b) && NormalOk(n)) return (b, n);
             }
         }
 

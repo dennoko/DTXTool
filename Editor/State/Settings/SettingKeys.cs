@@ -113,6 +113,10 @@ namespace Dennoko.DTXTool
         public static readonly Setting<bool> CreateMaskSubfolder = new Setting<bool>("CreateMaskSubfolder", true, P);
         /// <summary>PNG 出力で同じ名前のファイルを上書きする。オフなら「名前 1」「名前 2」… と空いている番号を付ける。</summary>
         public static readonly Setting<bool> OverwriteOutput = new Setting<bool>("OverwriteOutput", false, P);
+        /// <summary>PNG 出力に BaseMap を含める。</summary>
+        public static readonly Setting<bool> ExportBaseMap = new Setting<bool>("ExportBaseMap", true, P);
+        /// <summary>PNG 出力に NormalMap を含める。</summary>
+        public static readonly Setting<bool> ExportNormalMap = new Setting<bool>("ExportNormalMap", true, P);
         public static readonly Setting<bool> AutoApplyMaterial = new Setting<bool>("AutoApplyMaterial", false, P);
         public static readonly Setting<int> BlackThreshold = new Setting<int>("BlackThreshold", 128, P);
         public static readonly Setting<float> MirrorTolerance = new Setting<float>("MirrorTolerance", 0f, P);
