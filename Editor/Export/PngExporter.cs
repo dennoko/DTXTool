@@ -13,8 +13,10 @@ namespace Dennoko.DTXTool
         public static void Export(WorkSession s, MessageOrigin origin)
         {
             if (s == null) return;
-            bool exportBase = SettingsService.Get(SettingKeys.ExportBaseMap);
-            bool exportNormal = SettingsService.Get(SettingKeys.ExportNormalMap);
+            var doc = DocumentHost.instance.Doc;
+            bool baseOnly = doc.editMode == Core.EditMode.BaseOnly;
+            bool exportBase = baseOnly || SettingsService.Get(SettingKeys.ExportBaseMap);
+            bool exportNormal = !baseOnly && SettingsService.Get(SettingKeys.ExportNormalMap);
             if (!exportBase && !exportNormal)
             {
                 Notifier.Post(MessageLevel.Warning, L10n.T("status.noExportTarget"), origin);
@@ -26,7 +28,6 @@ namespace Dennoko.DTXTool
                 EditorUtility.DisplayProgressBar("DTXTool", L10n.T("status.baking"), 0.3f);
                 // ベイクと書き込みの間はプレビューを外しておく（保存処理と競合させない）
                 injector.Suspend();
-                var doc = DocumentHost.instance.Doc;
                 var bake = TextureBaker.Bake(s, doc, exportBase, exportNormal);
 
                 EditorUtility.DisplayProgressBar("DTXTool", L10n.T("status.writing"), 0.8f);

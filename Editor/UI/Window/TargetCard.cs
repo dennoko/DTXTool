@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Dennoko.DTXTool.Core;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -34,6 +35,20 @@ namespace Dennoko.DTXTool
             var targetSwitch = root.Q<Button>("target-switch");
             targetSwitch.tooltip = L10n.T("tooltip.switchTarget");
             targetSwitch.clicked += () => ShowSiblingMenu(targetSwitch);
+
+            var start = root.Q<Button>("target-start");
+            start.text = L10n.T("button.start");
+            start.clicked += () => SessionController.Start(PendingTarget);
+
+            root.Q<Label>("edit-mode-label").text = L10n.T("editMode.label");
+            var modeBaseOnly = root.Q<Button>("edit-mode-base-only");
+            var modeBaseNormal = root.Q<Button>("edit-mode-base-normal");
+            modeBaseOnly.text = L10n.T("editMode.baseOnly");
+            modeBaseOnly.tooltip = L10n.T("tooltip.editModeBaseOnly");
+            modeBaseNormal.text = L10n.T("editMode.baseAndNormal");
+            modeBaseNormal.tooltip = L10n.T("tooltip.editModeBaseAndNormal");
+            modeBaseOnly.clicked += () => SetEditMode(EditMode.BaseOnly);
+            modeBaseNormal.clicked += () => SetEditMode(EditMode.BaseAndNormal);
 
             var submesh = root.Q<DropdownField>("target-submesh");
             submesh.tooltip = L10n.T("tooltip.submesh");
@@ -151,11 +166,27 @@ namespace Dennoko.DTXTool
             menu.DropDown(anchor.worldBound, anchor, true);
         }
 
+        private static void SetEditMode(EditMode mode)
+        {
+            if (SessionController.Current == null) SettingsService.Set(SettingKeys.DefaultEditMode, mode);
+            else DocumentCommands.Edit(L10n.T("undo.editMode"), d => d.editMode = mode);
+        }
+
         private void Refresh()
         {
             var s = SessionController.Current;
             Bind.Show(_root.Q("target-idle"), s == null);
             Bind.Show(_candidates, s == null && _shownCandidates != null);
+            var start = _root.Q<Button>("target-start");
+            Bind.Show(start, s == null);
+            if (s == null)
+            {
+                start.SetEnabled(PendingTarget != null);
+                start.tooltip = PendingTarget != null ? string.Empty : L10n.T("tooltip.chooseTarget");
+            }
+            var mode = s == null ? SettingsService.Get(SettingKeys.DefaultEditMode) : DocumentHost.instance.Doc.editMode;
+            Bind.Active(_root.Q("edit-mode-base-only"), mode == EditMode.BaseOnly);
+            Bind.Active(_root.Q("edit-mode-base-normal"), mode == EditMode.BaseAndNormal);
             Bind.Show(_root.Q("target-working"), s != null);
             var info = _root.Q("target-info");
             if (s == null)

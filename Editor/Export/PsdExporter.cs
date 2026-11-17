@@ -108,20 +108,23 @@ namespace Dennoko.DTXTool
                     }
                     writer.EndGroup(BaseGroupName, true);
 
-                    // NormalMap フォルダ（初期非表示。外部ソフトでは「上で置き換える」近似表示になる）
-                    writer.BeginGroup();
-                    writer.AddLayer(BackgroundName, true, 1f, PsdWriter.BlendNormal, bgNormal, null, true);
-                    bgNormal = null;
-                    for (int i = 0; i < doc.layers.Count; i++)
+                    // NormalMap フォルダ（初期非表示。ベースのみモード時は省略）
+                    if (doc.editMode != EditMode.BaseOnly)
                     {
-                        var layer = doc.layers[i];
-                        EditorUtility.DisplayProgressBar("DTXTool", L10n.T("status.psdWriting"), 0.45f + 0.35f * i / Mathf.Max(1, doc.layers.Count));
-                        if (!compositor.RasterNormal(layer, source, raster)) continue;
-                        byte[] rgba = GpuReadback.ReadRGBA32(raster);
-                        byte[] mask = ReadMask(source, gpu, layer, size);
-                        writer.AddLayer(layer.name, layer.visible, layer.opacity, PsdWriter.BlendNormal, rgba, mask, true);
+                        writer.BeginGroup();
+                        writer.AddLayer(BackgroundName, true, 1f, PsdWriter.BlendNormal, bgNormal, null, true);
+                        bgNormal = null;
+                        for (int i = 0; i < doc.layers.Count; i++)
+                        {
+                            var layer = doc.layers[i];
+                            EditorUtility.DisplayProgressBar("DTXTool", L10n.T("status.psdWriting"), 0.45f + 0.35f * i / Mathf.Max(1, doc.layers.Count));
+                            if (!compositor.RasterNormal(layer, source, raster)) continue;
+                            byte[] rgba = GpuReadback.ReadRGBA32(raster);
+                            byte[] mask = ReadMask(source, gpu, layer, size);
+                            writer.AddLayer(layer.name, layer.visible, layer.opacity, PsdWriter.BlendNormal, rgba, mask, true);
+                        }
+                        writer.EndGroup(NormalGroupName, false, false);
                     }
-                    writer.EndGroup(NormalGroupName, false, false);
 
                     // 統合画像 = BaseMap の合成結果（エッジ拡張込み。PNG 出力と同じもの）
                     compositor.Render(doc, size, source);

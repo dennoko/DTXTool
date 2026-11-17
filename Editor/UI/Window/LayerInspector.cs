@@ -370,6 +370,7 @@ namespace Dennoko.DTXTool
         {
             var host = DocumentHost.instance;
             bool working = SessionController.Current != null;
+            bool baseOnly = host.Doc.editMode == EditMode.BaseOnly;
             var layer = working ? host.SelectedLayer : null;
             bool background = working && layer == null && host.SelectedLayerId == DocumentHost.BackgroundId;
             // 新しいレイヤーの範囲を選んでいる間は、設定を出さない（まだレイヤーが無い）
@@ -384,7 +385,8 @@ namespace Dennoko.DTXTool
                 var bg = host.Doc.background;
                 Bind.Show(_root.Q("bg-color"), bg.baseKind == BackgroundBaseKind.Color);
                 Bind.Show(_root.Q("bg-texture"), bg.baseKind == BackgroundBaseKind.Texture);
-                Bind.Show(_root.Q("bg-normal-map"), bg.normalKind == BackgroundNormalKind.Texture);
+                Bind.Show(_root.Q("bg-normal-row"), !baseOnly);
+                Bind.Show(_root.Q("bg-normal-map"), !baseOnly && bg.normalKind == BackgroundNormalKind.Texture);
             }
             if (layer == null) return;
 
@@ -399,10 +401,11 @@ namespace Dennoko.DTXTool
             Bind.Show(_root.Q("tiling-group"), !decal);
             Bind.Show(_root.Q("decal-group"), decal);
 
-            // ノーマルの強さと配置。方式とデカールの位置は、ベースのテクスチャが無い時だけここで決める
-            Bind.Show(_root.Q("normal-options"), normalTex);
-            // ノーマル用マスクは、ノーマルに何か描く時（または既に入れてある時）だけ出す
-            Bind.Show(_root.Q("normal-mask"), layer.AffectsNormal || layer.HasNormalMask);
+            // ノーマル関連（ベースのみモードの時は丸ごと隠してコンパクトにする）
+            Bind.Show(_root.Q("normal-map"), !baseOnly);
+            Bind.Show(_root.Q("normal-options"), !baseOnly && normalTex);
+            Bind.Show(_root.Q("replace-normal"), !baseOnly);
+            Bind.Show(_root.Q("normal-mask"), !baseOnly && (layer.AffectsNormal || layer.HasNormalMask));
             Bind.Show(_root.Q("normal-mode-row"), !baseTex);
             Bind.Show(_root.Q("normal-decal-group"), decal && !baseTex);
             // 「同じ配置にする」はベースのテクスチャをタイリングしている時だけ意味がある。オンなら個別の欄は隠す

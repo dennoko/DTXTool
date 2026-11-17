@@ -339,3 +339,14 @@
     flex-shrink: 0;
     margin: 0 8px 0 2px;
 }
+
+/* 対象カードのモード切替と作業開始ボタン */
+.dennoko-root .dtx-edit-mode-row {
+    margin-top: 6px;
+}
+
+.dennoko-root .unity-button.dtx-target-start {
+    margin-top: 6px;
+    height: 28px;
+    -unity-font-style: bold;
+}

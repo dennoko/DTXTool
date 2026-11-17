@@ -117,6 +117,8 @@ namespace Dennoko.DTXTool
         public static readonly Setting<bool> ExportBaseMap = new Setting<bool>("ExportBaseMap", true, P);
         /// <summary>PNG 出力に NormalMap を含める。</summary>
         public static readonly Setting<bool> ExportNormalMap = new Setting<bool>("ExportNormalMap", true, P);
+        /// <summary>新規作業開始時の編集モード（BaseOnly / BaseAndNormal）。</summary>
+        public static readonly Setting<Core.EditMode> DefaultEditMode = new Setting<Core.EditMode>("DefaultEditMode", Core.EditMode.BaseAndNormal, P);
         public static readonly Setting<bool> AutoApplyMaterial = new Setting<bool>("AutoApplyMaterial", false, P);
         public static readonly Setting<int> BlackThreshold = new Setting<int>("BlackThreshold", 128, P);
         public static readonly Setting<float> MirrorTolerance = new Setting<float>("MirrorTolerance", 0f, P);

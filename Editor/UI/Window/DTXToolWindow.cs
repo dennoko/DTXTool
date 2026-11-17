@@ -124,6 +124,7 @@ namespace Dennoko.DTXTool
                 bool output = working && !selecting;
                 Bind.Show(root.Q("psd-card"), output);
                 Bind.Show(root.Q("output-dock"), output);
+                Bind.Show(root.Q("footer"), working);
                 root.Q("footer").EnableInClassList("dennoko-footer--joined", output);
                 Bind.Show(root.Q("overwrite-output"), output);
             });
@@ -271,14 +272,12 @@ namespace Dennoko.DTXTool
             {
                 bool working = UiRules.Working;
                 bool selecting = working && DtxModeController.IsSelecting;
-                bool canStart = TargetCard.PendingTarget != null;
-                bool canExport = SettingsService.Get(SettingKeys.ExportBaseMap) || SettingsService.Get(SettingKeys.ExportNormalMap);
-                primary.text = !working ? L10n.T("button.start") : selecting ? L10n.T("button.confirmSelection") : L10n.T("button.exportPng");
-                primary.SetEnabled(working ? (selecting || canExport) : canStart);
+                bool baseOnly = DocumentHost.instance.Doc.editMode == Core.EditMode.BaseOnly;
+                bool canExport = baseOnly || SettingsService.Get(SettingKeys.ExportBaseMap) || SettingsService.Get(SettingKeys.ExportNormalMap);
+                primary.text = selecting ? L10n.T("button.confirmSelection") : L10n.T("button.exportPng");
+                primary.SetEnabled(working && (selecting || canExport));
                 // 押せない理由はツールチップに出す
-                if (!working && !canStart) primary.tooltip = L10n.T("tooltip.chooseTarget");
-                else if (working && !selecting && !canExport) primary.tooltip = L10n.T("tooltip.chooseExportTarget");
-                else primary.tooltip = string.Empty;
+                primary.tooltip = working && !selecting && !canExport ? L10n.T("tooltip.chooseExportTarget") : string.Empty;
                 Bind.Show(secondary, selecting);
             });
         }
@@ -404,6 +403,8 @@ namespace Dennoko.DTXTool
             var s = SessionController.Current;
             Bind.Show(_group, s != null);
             if (s == null) return;
+            bool baseOnly = DocumentHost.instance.Doc.editMode == Core.EditMode.BaseOnly;
+            Bind.Show(_normal, !baseOnly);
             var material = s.Injector.Active ? s.Injector.Material : s.TargetMaterial;
             var props = ShaderPropertyResolver.TextureProperties(material);
             Fill(_base, props, ShaderPropertyResolver.AutoBase(material), SettingsService.Get(SettingKeys.BaseProperty));
@@ -447,14 +448,18 @@ namespace Dennoko.DTXTool
             exportNormal.tooltip = L10n.T("tooltip.exportNormal");
             Bind.Toggle(exportNormal, SettingKeys.ExportNormalMap);
 
+            var targetsRow = root.Q("output-targets");
+            UiHub.Watch(targetsRow, () => Bind.Show(targetsRow, DocumentHost.instance.Doc.editMode != Core.EditMode.BaseOnly));
+
             var name = root.Q<TextField>("output-name");
             Bind.Text(name, SettingKeys.OutputName, () => OutputPaths.BaseName(SessionController.Current));
             UiHub.Watch(name, () =>
             {
                 var s = SessionController.Current;
                 if (s == null) return;
-                bool eb = SettingsService.Get(SettingKeys.ExportBaseMap);
-                bool en = SettingsService.Get(SettingKeys.ExportNormalMap);
+                bool baseOnly = DocumentHost.instance.Doc.editMode == Core.EditMode.BaseOnly;
+                bool eb = baseOnly || SettingsService.Get(SettingKeys.ExportBaseMap);
+                bool en = !baseOnly && SettingsService.Get(SettingKeys.ExportNormalMap);
                 string folder = OutputPaths.FolderFor(s);
                 var (basePath, normalPath) = OutputPaths.PngPaths(folder, OutputPaths.BaseName(s),
                     DocumentHost.instance.Doc, SettingsService.Get(SettingKeys.OverwriteOutput), eb, en);

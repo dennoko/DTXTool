@@ -51,6 +51,7 @@ namespace Dennoko.DTXTool.Tests
             SettingsService.ResetToLower(SettingKeys.Language);
             SettingsService.ResetToLower(SettingKeys.ExportBaseMap);
             SettingsService.ResetToLower(SettingKeys.ExportNormalMap);
+            SettingsService.ResetToLower(SettingKeys.DefaultEditMode);
         }
 
         private const string TempTexturePath = "Assets/DtxUiTestTexture.asset";
@@ -94,18 +95,22 @@ namespace Dennoko.DTXTool.Tests
             Assert.IsNotNull(root.Q("primary-button"));
             Assert.IsTrue(root.ClassListContains("dennoko-root"), "theme root class");
 
-            // Idle: 対象カードと主ボタンだけ
+            // Idle: 対象カード内の作業開始ボタンだけ（フッターは出さない）
             Assert.IsFalse(Shown(root, "session-banner"));
             Assert.IsFalse(Shown(root, "layers-card"));
             Assert.IsFalse(Shown(root, "psd-card"));
             Assert.IsFalse(Shown(root, "output-dock"));
             Assert.IsFalse(Shown(root, "uv-card"));
             Assert.IsFalse(Shown(root, "select-card"));
-            Assert.AreEqual(L10n.T("button.start"), root.Q<Button>("primary-button").text);
+            Assert.IsFalse(Shown(root, "footer"));
+            Assert.IsTrue(Shown(root, "target-start"));
+            Assert.AreEqual(L10n.T("button.start"), root.Q<Button>("target-start").text);
 
             // 作業中（レイヤーなし）
             Assert.IsTrue(SessionController.Start(_go.GetComponent<Renderer>()));
             root = Rebuild(window);
+            Assert.IsFalse(Shown(root, "target-start"));
+            Assert.IsTrue(Shown(root, "footer"));
             Assert.IsTrue(Shown(root, "session-banner"));
             Assert.IsTrue(Shown(root, "layers-card"));
             Assert.IsTrue(Shown(root, "layers-empty"), "empty state invites the first selection");
@@ -162,6 +167,18 @@ namespace Dennoko.DTXTool.Tests
             Assert.IsFalse(Shown(root, "base-placement"), "placement only matters when a texture is used");
             Assert.IsFalse(Shown(root, "normal-options"));
             Assert.IsTrue(root.Q<Button>("size-2048").ClassListContains("dennoko-button-active"));
+
+            // ベースのみモード: ノーマル関連 UI と出力対象チェックボックスを隠してコンパクトにする
+            DocumentCommands.Edit("base only", d => d.editMode = EditMode.BaseOnly);
+            root = Rebuild(window);
+            Assert.IsFalse(Shown(root, "normal-map"));
+            Assert.IsFalse(Shown(root, "replace-normal"));
+            Assert.IsFalse(Shown(root, "prop-normal"));
+            Assert.IsFalse(Shown(root, "output-targets"));
+            DocumentCommands.Edit("base and normal", d => d.editMode = EditMode.BaseAndNormal);
+            root = Rebuild(window);
+            Assert.IsTrue(Shown(root, "normal-map"));
+            Assert.IsTrue(Shown(root, "output-targets"));
 
             // テクスチャとノーマル（タイリング）: それぞれの欄の下に配置が出る。同じ配置にするは既定でオフ
             var tex = new Texture2D(4, 4);

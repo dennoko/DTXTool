@@ -42,6 +42,12 @@ namespace Dennoko.DTXTool.Core
         Texture = 1,
     }
 
+    public enum EditMode
+    {
+        BaseAndNormal = 0,
+        BaseOnly = 1,
+    }
+
     /// <summary>アセットへの参照（GUID が第一、パスは GUID が変わった時の手がかり）。</summary>
     [Serializable]
     public sealed class TextureRef
@@ -169,6 +175,7 @@ namespace Dennoko.DTXTool.Core
         public static readonly int[] Sizes = { 512, 1024, 2048, 4096 };
 
         public int formatVersion = CurrentFormatVersion;
+        public EditMode editMode = EditMode.BaseAndNormal;
         public int width = 2048;
         public int height = 2048;
         public int uvChannel;

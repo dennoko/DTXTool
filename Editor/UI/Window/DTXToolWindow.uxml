@@ -58,6 +58,14 @@
                 <uie:ObjectField name="target-field" type="UnityEngine.Renderer, UnityEngine.CoreModule" allow-scene-objects="true" />
             </ui:VisualElement>
             <ui:VisualElement name="target-candidates" class="dennoko-candidates" />
+            <ui:VisualElement name="edit-mode-row" class="dennoko-field-row dtx-edit-mode-row">
+                <ui:Label name="edit-mode-label" text="モード" class="dennoko-field-row__label" />
+                <ui:VisualElement name="edit-mode-group" class="dennoko-segmented dennoko-choice-group">
+                    <ui:Button name="edit-mode-base-only" text="ベースのみ" />
+                    <ui:Button name="edit-mode-base-normal" text="ベース＋ノーマル" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Button name="target-start" text="作業開始" class="dennoko-button-primary dtx-target-start" />
             <ui:VisualElement name="target-working" class="dennoko-target-row">
                 <ui:Button name="target-switch" class="dennoko-target-working">
                     <ui:VisualElement name="target-switch-icon" class="dennoko-icon" />
@@ -214,7 +222,7 @@
             </ui:VisualElement>
             <uie:ColorField name="bg-color" label="色" show-alpha="true" />
             <uie:ObjectField name="bg-texture" label="BaseMap" type="UnityEngine.Texture2D, UnityEngine.CoreModule" allow-scene-objects="false" />
-            <ui:VisualElement class="dennoko-field-row">
+            <ui:VisualElement name="bg-normal-row" class="dennoko-field-row">
                 <ui:Label name="bg-normal-label" text="ノーマル" class="dennoko-field-row__label" />
                 <ui:VisualElement name="bg-normal-group" class="dennoko-segmented dennoko-choice-group">
                     <ui:Button name="bg-normal-flat" text="平坦" />
@@ -248,7 +256,7 @@
                 <ui:Button name="size-2048" text="2048" />
                 <ui:Button name="size-4096" text="4096" />
             </ui:VisualElement>
-            <ui:VisualElement class="dtx-output-targets">
+            <ui:VisualElement name="output-targets" class="dtx-output-targets">
                 <ui:Toggle name="export-base" text="ベース" />
                 <ui:Toggle name="export-normal" text="ノーマル" />
             </ui:VisualElement>

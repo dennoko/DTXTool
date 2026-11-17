@@ -123,7 +123,12 @@ namespace Dennoko.DTXTool
                 DocumentAutoSave.FlushPending();
                 var saved = DocumentAutoSave.TryLoad(session.TargetKey);
                 _freshDocument = saved == null;
-                var doc = saved ?? new DtxDocument { meshHash = (long)a.MeshHash, triangleCount = a.TriangleCount };
+                var doc = saved ?? new DtxDocument
+                {
+                    meshHash = (long)a.MeshHash,
+                    triangleCount = a.TriangleCount,
+                    editMode = SettingsService.Get(SettingKeys.DefaultEditMode),
+                };
                 DocumentCommands.ResetForTarget(session.TargetKey, doc);
                 if (saved != null) info = L10n.T("status.restored");
             }

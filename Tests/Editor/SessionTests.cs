@@ -46,21 +46,22 @@ namespace Dennoko.DTXTool.Tests
             Pin(SettingKeys.UseTextureFolder, true);
             Pin(SettingKeys.ExportBaseMap, true);
             Pin(SettingKeys.ExportNormalMap, true);
+            Pin(SettingKeys.DefaultEditMode, EditMode.BaseAndNormal);
         }
 
         private readonly System.Collections.Generic.List<System.Action> _savedSettings = new System.Collections.Generic.List<System.Action>();
 
         /// <summary>プロジェクト設定をテストの間だけ value にする（元が既定のままなら、戻す時に値を消す）。</summary>
-        private void Pin(Setting<bool> s, bool value)
+        private void Pin<T>(Setting<T> s, T value)
         {
-            bool was = SettingsService.Get(s);
+            T was = SettingsService.Get(s);
             bool stored = SettingsService.IsOverridden(s);
             _savedSettings.Add(() =>
             {
                 if (stored) SettingsService.Set(s, was);
                 else SettingsService.ResetToLower(s);
             });
-            if (was != value) SettingsService.Set(s, value);
+            if (!System.Collections.Generic.EqualityComparer<T>.Default.Equals(was, value)) SettingsService.Set(s, value);
         }
 
         [TearDown]
@@ -603,6 +604,43 @@ namespace Dennoko.DTXTool.Tests
             SessionCommands.ExportPng(MessageOrigin.Window);
             Assert.IsFalse(File.Exists(basePath), basePath);
             Assert.IsFalse(File.Exists(normalPath), normalPath);
+        }
+
+        [Test]
+        public void BaseOnlyMode_PreservesMaterialNormalAndSwitchesMidSession()
+        {
+            string origNormalPath = TempDir + "/OrigNormal.png";
+            File.WriteAllBytes(origNormalPath, new Texture2D(4, 4).EncodeToPNG());
+            AssetDatabase.ImportAsset(origNormalPath);
+            var origNormal = AssetDatabase.LoadAssetAtPath<Texture2D>(origNormalPath);
+            _material.SetTexture("_BumpMap", origNormal);
+            _material.EnableKeyword("_NORMALMAP");
+
+            SettingsService.Set(SettingKeys.DefaultEditMode, EditMode.BaseOnly);
+            var s = Start();
+            Assert.AreEqual(EditMode.BaseOnly, DocumentHost.instance.Doc.editMode);
+            Assert.AreSame(s.Renderer.PreviewBase, _material.GetTexture("_MainTex"), "base is previewed");
+            Assert.AreSame(origNormal, _material.GetTexture("_BumpMap"), "existing normal is kept untouched in BaseOnly");
+
+            // 作業中にベース＋ノーマルへ切替 → ノーマルもプレビュー注入される
+            DocumentCommands.Edit("to full", d => d.editMode = EditMode.BaseAndNormal);
+            Assert.AreSame(s.Renderer.PreviewNormal, _material.GetTexture("_BumpMap"));
+
+            // 再びベースのみへ戻す → 元のノーマルマップへ即座に復元される
+            DocumentCommands.Edit("to base only", d => d.editMode = EditMode.BaseOnly);
+            Assert.AreSame(origNormal, _material.GetTexture("_BumpMap"));
+
+            // BaseOnly では ExportNormalMap が true でも BaseMap のみ出力される
+            AddRedLayer(s, 0, 1);
+            SessionCommands.ExportPng(MessageOrigin.Window);
+            Assert.IsTrue(File.Exists(TempDir + "/DtxTestTarget_BaseMap.png"));
+            Assert.IsFalse(File.Exists(TempDir + "/DtxTestTarget_NormalMap.png"));
+
+            // PSD 出力と再読み込みで editMode = BaseOnly が復元される
+            Assert.IsTrue(PsdExporter.Export(s, _psdPath, MessageOrigin.Window));
+            DocumentCommands.Edit("temp switch", d => d.editMode = EditMode.BaseAndNormal);
+            Assert.IsTrue(PsdImporter.Import(s, _psdPath, MessageOrigin.Window));
+            Assert.AreEqual(EditMode.BaseOnly, DocumentHost.instance.Doc.editMode);
         }
 
         [Test]

@@ -49,6 +49,7 @@ namespace Dennoko.DTXTool
         private (SelectionGranularity, int, int, int) _hoverLinesKey = (SelectionGranularity.UVIsland, -2, -2, -1);
         private (int, SelectionGranularity, int) _countKey = (-1, SelectionGranularity.UVIsland, int.MinValue);
         private int _countFull, _countTotal;
+        private EditMode _previewEditMode;
 
         public WorkSession(Renderer target, string targetKey, WorkMesh mesh)
         {
@@ -109,6 +110,7 @@ namespace Dennoko.DTXTool
             UVView = new UVViewRenderer(gpu);
             Renderer = new DtxRenderer(this, gpu, Tri, Analysis.NeedsWrap);
             Renderer.TargetsChanged += Injector.Apply;
+            DocumentHost.Changed += SyncPreviewMode;
             RebuildEdgeLines();
         }
 
@@ -143,15 +145,23 @@ namespace Dennoko.DTXTool
             _flagsSelectionRevision = state.SelectionRevision;
         }
 
-        /// <summary>対象マテリアルへプレビューを注入する（プロパティの選び直し・対象サブメッシュの変更でも呼ぶ）。</summary>
+        /// <summary>対象マテリアルへプレビューを注入する（プロパティの選び直し・対象サブメッシュの変更・モード切替でも呼ぶ）。</summary>
         public void BeginPreview()
         {
             var material = TargetMaterial;
+            _previewEditMode = DocumentHost.instance.Doc.editMode;
+            bool baseOnly = _previewEditMode == EditMode.BaseOnly;
             Injector.Begin(material,
                 ShaderPropertyResolver.ResolveBase(material),
-                ShaderPropertyResolver.ResolveNormal(material),
+                baseOnly ? null : ShaderPropertyResolver.ResolveNormal(material),
                 () => Renderer?.PreviewBase,
-                () => Renderer?.PreviewNormal);
+                baseOnly ? (Func<Texture>)null : () => Renderer?.PreviewNormal);
+        }
+
+        private void SyncPreviewMode()
+        {
+            if (Injector.Active && _previewEditMode != DocumentHost.instance.Doc.editMode)
+                BeginPreview();
         }
 
         /// <summary>プレビューを注入する前にマテリアルに入っていたベーステクスチャ（アセットの時だけ）。</summary>
@@ -350,6 +360,7 @@ namespace Dennoko.DTXTool
 
         public void Dispose()
         {
+            DocumentHost.Changed -= SyncPreviewMode;
             Injector.End();
             Renderer?.Dispose();
             Isolation.Exit();
