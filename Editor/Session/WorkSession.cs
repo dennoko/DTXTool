@@ -332,7 +332,7 @@ namespace Dennoko.DTXTool
         public int EffectiveMargin(Vector2Int size)
         {
             int m = SettingsService.Get(SettingKeys.PixelMargin);
-            if (m < 0) m = Mathf.Max(size.x, size.y) / 256;
+            if (m < 0) m = Mathf.Max(size.x, size.y) / 32;
             return Mathf.Clamp(m, 0, SettingKeys.MaxPixelMargin);
         }
 

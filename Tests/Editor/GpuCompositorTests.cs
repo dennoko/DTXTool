@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Dennoko.DTXTool.Core;
 using NUnit.Framework;
 using UnityEngine;
@@ -552,6 +552,70 @@ namespace Dennoko.DTXTool.Tests
             var none = TextureBaker.Pad(_gpu, color, coverage, 0, RenderTextureFormat.ARGB32);
             var nb = GpuReadback.ReadRGBA32(none);
             Assert.AreEqual(0, nb[(8 * Size + 8) * 4], "zero width leaves the image as is");
+        }
+
+        [Test]
+        public void Pad_VoronoiSplitsGutterCleanlyBetweenTwoIslands()
+        {
+            // 左の島（x < 4, 赤）と右の島（x >= 12, 緑）の間に 8px の余白（x = 4..11）
+            var colorPx = new Color32[Size * Size];
+            var coverPx = new Color32[Size * Size];
+            for (int y = 0; y < Size; y++)
+            {
+                for (int x = 0; x < Size; x++)
+                {
+                    if (x < 4)
+                    {
+                        colorPx[y * Size + x] = new Color32(255, 0, 0, 255);
+                        coverPx[y * Size + x] = new Color32(255, 255, 255, 255);
+                    }
+                    else if (x >= 12)
+                    {
+                        colorPx[y * Size + x] = new Color32(0, 255, 0, 255);
+                        coverPx[y * Size + x] = new Color32(255, 255, 255, 255);
+                    }
+                    else
+                    {
+                        colorPx[y * Size + x] = new Color32(0, 0, 255, 128);
+                        coverPx[y * Size + x] = new Color32(0, 0, 0, 255);
+                    }
+                }
+            }
+            var color = _gpu.CreateRT("VC", Size, Size, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear, FilterMode.Point, TextureWrapMode.Clamp);
+            var coverage = _gpu.CreateMaskRT("VV", Size, Size, TextureWrapMode.Clamp);
+            Graphics.Blit(Make(Size, Size, colorPx, true), color);
+            Graphics.Blit(Make(Size, Size, coverPx, true), coverage);
+
+            // パディング幅が余白より大きくても、中間で分かれて隣の島の色を汚さない
+            var padded = TextureBaker.Pad(_gpu, color, coverage, 16, RenderTextureFormat.ARGB32);
+            var b = GpuReadback.ReadRGBA32(padded);
+            Color32 At(int x, int y) => new Color32(b[(y * Size + x) * 4], b[(y * Size + x) * 4 + 1], b[(y * Size + x) * 4 + 2], b[(y * Size + x) * 4 + 3]);
+
+            for (int x = 4; x <= 7; x++)
+            {
+                Assert.AreEqual(255, At(x, 8).r, 1, "left half of gutter belongs to red island: x=" + x);
+                Assert.AreEqual(0, At(x, 8).g, 1, "x=" + x);
+            }
+            for (int x = 8; x <= 11; x++)
+            {
+                Assert.AreEqual(0, At(x, 8).r, 1, "right half of gutter belongs to green island: x=" + x);
+                Assert.AreEqual(255, At(x, 8).g, 1, "x=" + x);
+            }
+
+            // マスクの Voronoi パディングでも、選択した左島が未選択の右島側へ滲まない
+            var mergedPx = new Color32[Size * Size];
+            for (int y = 0; y < Size; y++)
+                for (int x = 0; x < Size; x++)
+                    mergedPx[y * Size + x] = x < 4 ? new Color32(255, 255, 255, 255) : new Color32(0, 0, 0, 255);
+            var merged = _gpu.CreateMaskRT("VM", Size, Size, TextureWrapMode.Clamp);
+            var outMask = _gpu.CreateMaskRT("VO", Size, Size, TextureWrapMode.Clamp);
+            var maskMat = _gpu.RequireMaterial("Hidden/DTXTool/LayerMask");
+            Graphics.Blit(Make(Size, Size, mergedPx, true), merged);
+            JfaDilate.DilateMask(_gpu, maskMat, merged, coverage, outMask, Size, Size, 16);
+            var m = GpuReadback.ReadR8(outMask);
+            Assert.AreEqual(255, m[8 * Size + 6], "left side of gutter is padded to 255");
+            Assert.AreEqual(0, m[8 * Size + 9], "right side of gutter stays 0 for the unselected island");
+            Assert.AreEqual(0, m[8 * Size + 12], "unselected island is untouched");
         }
     }
 }

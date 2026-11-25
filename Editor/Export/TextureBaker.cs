@@ -40,12 +40,12 @@ namespace Dennoko.DTXTool
     /// </summary>
     internal static class TextureBaker
     {
-        /// <summary>エッジ拡張の幅（px）。設定が自動（負）なら解像度 / 128。</summary>
+        /// <summary>エッジ拡張の幅（px）。設定が自動（負）なら解像度 / 16（2048px で 128px、LOD / Mipmap 対策）。</summary>
         public static int EffectivePadding(int size)
         {
             int p = SettingsService.Get(SettingKeys.EdgePadding);
-            if (p < 0) p = size / 128;
-            return Mathf.Clamp(p, 0, 64);
+            if (p < 0) p = size / 16;
+            return Mathf.Clamp(p, 0, SettingKeys.MaxEdgePadding);
         }
 
         public static BakeResult Bake(WorkSession s, DtxDocument doc, bool bakeBase = true, bool bakeNormal = true)
@@ -102,48 +102,36 @@ namespace Dennoko.DTXTool
         }
 
         /// <summary>
-        /// エッジ拡張（Dilation）。面が使っていない画素へ、隣の有効な画素の色を 1 画素ずつ押し広げる。
+        /// エッジ拡張（Voronoi Jump Flooding Dilation）。面が使っていない画素へ、最近傍の有効な画素の色を押し広げる。
         /// 戻り値は新しい RenderTexture（呼び出し側が解放する）。
         /// </summary>
         public static RenderTexture Pad(GpuResources gpu, RenderTexture color, RenderTexture coverage, int iterations, RenderTextureFormat format)
         {
-            int size = color.width;
+            int width = color.width;
+            int height = color.height;
             var mask = gpu.RequireMaterial("Hidden/DTXTool/LayerMask");
-            var a = gpu.CreateRT("PadA", size, size, format, RenderTextureReadWrite.Linear, FilterMode.Point, TextureWrapMode.Clamp);
-            var b = iterations > 0 ? gpu.CreateRT("PadB", size, size, format, RenderTextureReadWrite.Linear, FilterMode.Point, TextureWrapMode.Clamp) : null;
-            var va = iterations > 0 ? gpu.CreateMaskRT("PadValidA", size, size, TextureWrapMode.Clamp) : null;
-            var vb = iterations > 0 ? gpu.CreateMaskRT("PadValidB", size, size, TextureWrapMode.Clamp) : null;
+            var dst = gpu.CreateRT("PadResult", width, height, format, RenderTextureReadWrite.Linear, FilterMode.Point, TextureWrapMode.Clamp);
             var prev = RenderTexture.active;
             try
             {
-                Graphics.Blit(color, a);
                 if (iterations > 0)
                 {
-                    Graphics.Blit(coverage, va);
-                    mask.SetVector(DtxShaderIds.OutSize, new Vector4(size, size, 1f / size, 1f / size));
-                    for (int i = 0; i < iterations; i++)
-                    {
-                        mask.SetTexture(DtxShaderIds.SrcTex, a);
-                        mask.SetTexture(DtxShaderIds.ValidTex, va);
-                        Graphics.Blit(gpu.Dummy, b, mask, DtxShaderIds.PadColor);
-                        Graphics.Blit(gpu.Dummy, vb, mask, DtxShaderIds.PadValid);
-                        (a, b) = (b, a);
-                        (va, vb) = (vb, va);
-                    }
+                    JfaDilate.DilateColor(gpu, mask, color, coverage, dst, width, height, iterations);
                 }
-                return a;
+                else
+                {
+                    Graphics.Blit(color, dst);
+                }
+                return dst;
             }
             catch (Exception)
             {
-                gpu.Release(a);
+                gpu.Release(dst);
                 throw;
             }
             finally
             {
                 RenderTexture.active = prev;
-                gpu.Release(b);
-                gpu.Release(va);
-                gpu.Release(vb);
                 gpu.Release(mask);
             }
         }

@@ -36,7 +36,101 @@ namespace Dennoko.DTXTool
             BlendNormal = 5, PresentBase = 6, PresentNormal = 7, RasterBase = 8, RasterNormal = 9;
 
         // LayerMask.shader のパス番号
-        public const int ImportImage = 0, CopyRaw = 1, BlurH = 2, BlurV = 3, Finish = 4, PadColor = 5, PadValid = 6;
+        public const int ImportImage = 0, CopyRaw = 1, BlurH = 2, BlurV = 3, Finish = 4, PadColor = 5, PadValid = 6,
+            JfaInit = 7, JfaStep = 8, JfaApplyColor = 9, JfaApplyMask = 10;
+    }
+
+    /// <summary>
+    /// Voronoi Jump Flooding Algorithm (JFA+1) による高速 UV パディング。
+    /// すべての UV 島を同時にシードとするため、大きなパディング幅でも近隣の別アイランドへ滲まない。
+    /// パス数は O(log R) なので 128–256px のパディングも数パスで完了する。
+    /// </summary>
+    internal static class JfaDilate
+    {
+        private static readonly RenderTextureFormat SeedFormat =
+            SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGFloat)
+                ? RenderTextureFormat.RGFloat
+                : RenderTextureFormat.ARGBFloat;
+
+        public static void DilateColor(GpuResources gpu, Material maskMat, Texture srcColor, Texture coverage, RenderTexture dst, int width, int height, int radius)
+        {
+            var prev = RenderTexture.active;
+            var seeds = RunJfa(gpu, maskMat, coverage, Texture2D.blackTexture, width, height, radius);
+            try
+            {
+                maskMat.SetVector(DtxShaderIds.OutSize, new Vector4(width, height, 1f / width, 1f / height));
+                maskMat.SetFloat(DtxShaderIds.Radius, radius);
+                maskMat.SetTexture(DtxShaderIds.SrcTex, srcColor);
+                maskMat.SetTexture(DtxShaderIds.ValidTex, seeds);
+                Graphics.Blit(gpu.Dummy, dst, maskMat, DtxShaderIds.JfaApplyColor);
+            }
+            finally
+            {
+                RenderTexture.active = prev;
+                gpu.Release(seeds);
+            }
+        }
+
+        public static void DilateMask(GpuResources gpu, Material maskMat, Texture merged, Texture coverage, RenderTexture dst, int width, int height, int radius)
+        {
+            var prev = RenderTexture.active;
+            var seeds = RunJfa(gpu, maskMat, coverage, merged, width, height, radius);
+            try
+            {
+                maskMat.SetVector(DtxShaderIds.OutSize, new Vector4(width, height, 1f / width, 1f / height));
+                maskMat.SetFloat(DtxShaderIds.Radius, radius);
+                maskMat.SetTexture(DtxShaderIds.SrcTex, merged);
+                maskMat.SetTexture(DtxShaderIds.ValidTex, seeds);
+                Graphics.Blit(gpu.Dummy, dst, maskMat, DtxShaderIds.JfaApplyMask);
+            }
+            finally
+            {
+                RenderTexture.active = prev;
+                gpu.Release(seeds);
+            }
+        }
+
+        private static RenderTexture RunJfa(GpuResources gpu, Material maskMat, Texture coverage, Texture extraSeeds, int width, int height, int radius)
+        {
+            var a = gpu.CreateRT("JfaA", width, height, SeedFormat, RenderTextureReadWrite.Linear, FilterMode.Point, TextureWrapMode.Clamp);
+            var b = gpu.CreateRT("JfaB", width, height, SeedFormat, RenderTextureReadWrite.Linear, FilterMode.Point, TextureWrapMode.Clamp);
+            try
+            {
+                maskMat.SetVector(DtxShaderIds.OutSize, new Vector4(width, height, 1f / width, 1f / height));
+                maskMat.SetTexture(DtxShaderIds.ValidTex, coverage);
+                maskMat.SetTexture(DtxShaderIds.SrcTex, extraSeeds);
+                Graphics.Blit(gpu.Dummy, a, maskMat, DtxShaderIds.JfaInit);
+
+                int maxDim = Mathf.Max(width, height);
+                int target = Mathf.Min(Mathf.Max(1, radius), maxDim);
+                int step = 1;
+                while (step < target) step <<= 1;
+
+                while (step >= 1)
+                {
+                    maskMat.SetFloat(DtxShaderIds.Radius, step);
+                    maskMat.SetTexture(DtxShaderIds.SrcTex, a);
+                    Graphics.Blit(gpu.Dummy, b, maskMat, DtxShaderIds.JfaStep);
+                    (a, b) = (b, a);
+                    step >>= 1;
+                }
+                // JFA+1: 最後に step=1 を 1 回追加して最近傍誤差を抑える
+                maskMat.SetFloat(DtxShaderIds.Radius, 1f);
+                maskMat.SetTexture(DtxShaderIds.SrcTex, a);
+                Graphics.Blit(gpu.Dummy, b, maskMat, DtxShaderIds.JfaStep);
+                (a, b) = (b, a);
+
+                gpu.Release(b);
+                b = null;
+                return a;
+            }
+            catch (Exception)
+            {
+                gpu.Release(a);
+                gpu.Release(b);
+                throw;
+            }
+        }
     }
 
     /// <summary>テクスチャの読み方（色空間・ノーマルの格納形式）。</summary>
@@ -85,7 +179,7 @@ namespace Dennoko.DTXTool
     /// </summary>
     internal sealed class LayerMaskBuilder
     {
-        public const int MaxMargin = 128;
+        public const int MaxMargin = 512;
 
         private readonly GpuResources _gpu;
         private readonly TriMesh _tri;
@@ -150,7 +244,6 @@ namespace Dennoko.DTXTool
             var island = _gpu.CreateMaskRT("LayerIsland", size, size, TextureWrapMode.Clamp);
             var coverage = _gpu.CreateMaskRT("LayerCoverage", size, size, TextureWrapMode.Clamp);
             var merged = _gpu.CreateMaskRT("LayerMerged", size, size, TextureWrapMode.Clamp);
-            var temp = _gpu.CreateMaskRT("LayerTemp", size, size, TextureWrapMode.Clamp);
             try
             {
                 _tri.UpdateFlags(bits, active, false);
@@ -167,13 +260,7 @@ namespace Dennoko.DTXTool
                 Graphics.Blit(_gpu.Dummy, merged, ops, ShaderIds.OpDownsample);
                 if (margin > 0)
                 {
-                    ops.SetFloat(ShaderIds.Margin, margin);
-                    ops.SetTexture(ShaderIds.SrcTex, merged);
-                    Graphics.Blit(_gpu.Dummy, temp, ops, ShaderIds.OpDilateH);
-                    ops.SetTexture(ShaderIds.SrcTex, temp);
-                    ops.SetTexture(ShaderIds.MergedTex, merged);
-                    ops.SetTexture(ShaderIds.CoverageTex, coverage);
-                    Graphics.Blit(_gpu.Dummy, result, ops, ShaderIds.OpDilateV);
+                    JfaDilate.DilateMask(_gpu, _mask, merged, coverage, result, size, size, margin);
                 }
                 else
                 {
@@ -187,7 +274,6 @@ namespace Dennoko.DTXTool
                 _gpu.Release(island);
                 _gpu.Release(coverage);
                 _gpu.Release(merged);
-                _gpu.Release(temp);
                 _restoreFlags?.Invoke();
             }
             return result;

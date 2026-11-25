@@ -12,8 +12,9 @@ namespace Dennoko.DTXTool
         private readonly GpuResources _gpu;
         private readonly TriMesh _tri;
         private readonly PaintSurface _paint;
+        private readonly Material _layerMask;
 
-        private RenderTexture _coverage, _island, _merged, _temp, _mask;
+        private RenderTexture _coverage, _island, _merged, _mask;
         private int _width, _height;
         private int _coverageKey = -1, _islandKey = -1;
         private int _coverageVersion, _islandVersion;
@@ -32,6 +33,7 @@ namespace Dennoko.DTXTool
             _tri = tri;
             _paint = paint;
             _wrap = needsWrap;
+            _layerMask = gpu.RequireMaterial("Hidden/DTXTool/LayerMask");
         }
 
         public void Ensure(int width, int height, int margin)
@@ -68,7 +70,6 @@ namespace Dennoko.DTXTool
             _coverage = _gpu.CreateMaskRT("Coverage", width, height, TextureWrapMode.Clamp);
             _island = _gpu.CreateMaskRT("Island", width, height, TextureWrapMode.Clamp);
             _merged = _gpu.CreateMaskRT("Merged", width, height, TextureWrapMode.Clamp);
-            _temp = _gpu.CreateMaskRT("Temp", width, height, TextureWrapMode.Clamp);
             _mask = _gpu.CreateMaskRT("Mask", width, height, TextureWrapMode.Repeat);
             return true;
         }
@@ -101,13 +102,7 @@ namespace Dennoko.DTXTool
             Graphics.Blit(_gpu.Dummy, _merged, m, ShaderIds.OpDownsample);
             if (margin > 0)
             {
-                m.SetFloat(ShaderIds.Margin, margin);
-                m.SetTexture(ShaderIds.SrcTex, _merged);
-                Graphics.Blit(_gpu.Dummy, _temp, m, ShaderIds.OpDilateH);
-                m.SetTexture(ShaderIds.SrcTex, _temp);
-                m.SetTexture(ShaderIds.MergedTex, _merged);
-                m.SetTexture(ShaderIds.CoverageTex, _coverage);
-                Graphics.Blit(_gpu.Dummy, _mask, m, ShaderIds.OpDilateV);
+                JfaDilate.DilateMask(_gpu, _layerMask, _merged, _coverage, _mask, _width, _height, margin);
             }
             else
             {
@@ -125,11 +120,14 @@ namespace Dennoko.DTXTool
             _gpu.Release(_coverage);
             _gpu.Release(_island);
             _gpu.Release(_merged);
-            _gpu.Release(_temp);
             _gpu.Release(_mask);
-            _coverage = _island = _merged = _temp = _mask = null;
+            _coverage = _island = _merged = _mask = null;
         }
 
-        public void Dispose() => ReleaseTargets();
+        public void Dispose()
+        {
+            ReleaseTargets();
+            _gpu.Release(_layerMask);
+        }
     }
 }

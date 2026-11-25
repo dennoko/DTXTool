@@ -156,5 +156,93 @@ Shader "Hidden/DTXTool/LayerMask"
             }
             ENDCG
         }
+
+        // 7: JfaInit（Voronoi Jump Flooding の初期シード。_ValidTex または _SrcTex が有効なら自身の画素座標を書く）
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert_img
+            #pragma fragment frag
+            float4 frag(v2f_img i) : SV_Target
+            {
+                float2 px = clamp(floor(i.uv * _OutSize.xy), 0.0, _OutSize.xy - 1.0);
+                if (Lod0(_ValidTex, i.uv).r > 0.5 || Lod0(_SrcTex, i.uv).r > 0.5)
+                    return float4(px, 0.0, 1.0);
+                return float4(-1.0, -1.0, 0.0, 0.0);
+            }
+            ENDCG
+        }
+
+        // 8: JfaStep（Jump Flooding の 1 ステップ。距離 _Radius の 3×3 近傍から最近傍シードを選ぶ）
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert_img
+            #pragma fragment frag
+            float4 frag(v2f_img i) : SV_Target
+            {
+                float2 px = clamp(floor(i.uv * _OutSize.xy), 0.0, _OutSize.xy - 1.0);
+                float2 best = float2(-1.0, -1.0);
+                float bestDist2 = 1e20;
+                float stepPx = _Radius;
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        float2 q = px + float2(dx, dy) * stepPx;
+                        if (q.x < 0.0 || q.y < 0.0 || q.x >= _OutSize.x || q.y >= _OutSize.y) continue;
+                        float2 seed = Lod0(_SrcTex, (q + 0.5) * _OutSize.zw).xy;
+                        if (seed.x < -0.5) continue;
+                        float2 d = seed - px;
+                        float dist2 = dot(d, d);
+                        if (dist2 < bestDist2)
+                        {
+                            bestDist2 = dist2;
+                            best = seed;
+                        }
+                    }
+                }
+                return float4(best, 0.0, 1.0);
+            }
+            ENDCG
+        }
+
+        // 9: JfaApplyColor（最近傍シードの色を _Radius 以内の未カバー画素へコピー。アルファは元を保つ）
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert_img
+            #pragma fragment frag
+            float4 frag(v2f_img i) : SV_Target
+            {
+                float4 orig = Lod0(_SrcTex, i.uv);
+                float2 px = clamp(floor(i.uv * _OutSize.xy), 0.0, _OutSize.xy - 1.0);
+                float2 seed = Lod0(_ValidTex, i.uv).xy;
+                if (seed.x < -0.5) return orig;
+                float2 d = seed - px;
+                if (dot(d, d) > _Radius * _Radius + 0.001) return orig;
+                float4 padded = Lod0(_SrcTex, (seed + 0.5) * _OutSize.zw);
+                return float4(padded.rgb, orig.a);
+            }
+            ENDCG
+        }
+
+        // 10: JfaApplyMask（最近傍シードのマスク値を _Radius 以内へ展開。隣り合う島は中間で分かれ、他島へ滲まない）
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert_img
+            #pragma fragment frag
+            float4 frag(v2f_img i) : SV_Target
+            {
+                float2 px = clamp(floor(i.uv * _OutSize.xy), 0.0, _OutSize.xy - 1.0);
+                float2 seed = Lod0(_ValidTex, i.uv).xy;
+                if (seed.x < -0.5) return 0.0;
+                float2 d = seed - px;
+                if (dot(d, d) > _Radius * _Radius + 0.001) return 0.0;
+                return Lod0(_SrcTex, (seed + 0.5) * _OutSize.zw).r > 0.5 ? 1.0 : 0.0;
+            }
+            ENDCG
+        }
     }
 }

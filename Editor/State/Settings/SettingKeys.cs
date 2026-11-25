@@ -139,6 +139,7 @@ namespace Dennoko.DTXTool
         public static readonly int[] TextureSizes = { 512, 1024, 2048, 4096 };
         public const int MinBrushSize = 1;
         public const int MaxBrushSize = 300;
-        public const int MaxPixelMargin = 32;
+        public const int MaxPixelMargin = 256;
+        public const int MaxEdgePadding = 256;
     }
 }

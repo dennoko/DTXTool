@@ -52,7 +52,7 @@ namespace Dennoko.DTXTool
                     BoolRow(page, "project.useTextureFolder", SettingKeys.UseTextureFolder, SettingLayer.Project);
                     TextRow(page, "project.outputDir", SettingKeys.OutputDir, SettingLayer.Project);
                     IntRow(page, "project.margin", SettingKeys.PixelMargin, SettingLayer.Project, -1, SettingKeys.MaxPixelMargin);
-                    IntRow(page, "project.edgePadding", SettingKeys.EdgePadding, SettingLayer.Project, -1, 64);
+                    IntRow(page, "project.edgePadding", SettingKeys.EdgePadding, SettingLayer.Project, -1, SettingKeys.MaxEdgePadding);
                     IntRow(page, "project.threshold", SettingKeys.BlackThreshold, SettingLayer.Project, 0, 255);
                     FloatRow(page, "project.mirrorTolerance", SettingKeys.MirrorTolerance, SettingLayer.Project, 0f, 0.05f);
                 }),

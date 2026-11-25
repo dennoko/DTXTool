@@ -7,7 +7,7 @@ namespace Dennoko.DTXTool.Tests
     public sealed class ShaderTests
     {
         [TestCase("Hidden/DTXTool/Compose", 10)]
-        [TestCase("Hidden/DTXTool/LayerMask", 7)]
+        [TestCase("Hidden/DTXTool/LayerMask", 11)]
         [TestCase("Hidden/DTXTool/UVRaster", 4)]
         [TestCase("Hidden/DTXTool/ImageOps", 6)]
         [TestCase("Hidden/DTXTool/Overlay", 2)]
