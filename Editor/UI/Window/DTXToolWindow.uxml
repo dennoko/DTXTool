@@ -239,11 +239,17 @@
             <uie:ObjectField name="bg-normal-map" label="NormalMap" type="UnityEngine.Texture2D, UnityEngine.CoreModule" allow-scene-objects="false" />
         </ui:VisualElement>
 
-        <!-- PSD（保存と読み込みだけ。PNG の解像度・ファイル名は出力ドック） -->
+        <!-- PSD（参照保持によるワンクリック上書き保存・別名保存・読み込み） -->
         <ui:VisualElement name="psd-card" class="dennoko-card dennoko-output-card">
             <ui:VisualElement class="dennoko-card-header dennoko-card-header--row">
                 <ui:Label name="psd-header" text="PSD" class="dennoko-section-title dennoko-card-header__title" />
             </ui:VisualElement>
+            <ui:VisualElement name="psd-linked-row" class="dennoko-hrow dtx-psd-linked">
+                <ui:VisualElement name="psd-linked-icon" class="dennoko-icon dtx-psd-linked__icon" />
+                <ui:Label name="psd-linked-name" text="" class="dennoko-col-grow dtx-psd-linked__name" />
+                <ui:Button name="psd-unlink" class="dennoko-icon-button" />
+            </ui:VisualElement>
+            <ui:Button name="psd-overwrite" text="PSD 上書き保存" class="dtx-psd-overwrite" />
             <ui:VisualElement class="dennoko-hrow dtx-psd-row">
                 <ui:Button name="psd-export" text="PSD 保存" class="dennoko-col-grow" />
                 <ui:Button name="psd-import" text="PSD 読み込み" class="dennoko-col-grow" />

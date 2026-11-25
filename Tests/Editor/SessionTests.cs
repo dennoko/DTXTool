@@ -689,6 +689,9 @@ namespace Dennoko.DTXTool.Tests
             Assert.AreEqual(0, psd.MergedRgb[(Mid * Size + Right) * 3], 2);
             Assert.AreEqual(255, psd.MergedRgb[(Mid * Size + Right) * 3 + 2], 2);
 
+            // PSD 参照が保持され、ワンクリック上書き保存ができる
+            Assert.AreEqual(Path.GetFullPath(_psdPath), PsdLink.ResolvePath());
+
             // 読み込み: 別の内容にしてから読み直すと元に戻る
             DocumentCommands.Delete("delete", layer.id);
             DocumentCommands.EditBackground("bg", b => b.color = Color.green);

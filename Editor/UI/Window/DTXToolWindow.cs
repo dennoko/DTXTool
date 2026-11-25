@@ -472,6 +472,23 @@ namespace Dennoko.DTXTool
                 name.tooltip = L10n.T("tooltip.outputName") + "\n" + folder + "/" + files;
             });
 
+            var linkedRow = root.Q("psd-linked-row");
+            DennokoIcons.SetImage(root.Q("psd-linked-icon"), Icons.Texture);
+            var linkedName = root.Q<Label>("psd-linked-name");
+            linkedName.RegisterCallback<ClickEvent>(_ =>
+            {
+                string assetPath = PsdLink.ResolveAssetPath();
+                if (string.IsNullOrEmpty(assetPath)) return;
+                var obj = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
+                if (obj != null) EditorGUIUtility.PingObject(obj);
+            });
+            var unlink = DennokoIcons.Apply(root.Q<Button>("psd-unlink"), Icons.Cancel, "×", L10n.T("tooltip.unlinkPsd"));
+            unlink.clicked += PsdLink.Clear;
+
+            var overwritePsd = root.Q<Button>("psd-overwrite");
+            overwritePsd.text = L10n.T("button.overwritePsd");
+            overwritePsd.clicked += () => SessionCommands.OverwriteLinkedPsd(MessageOrigin.Window);
+
             var export = root.Q<Button>("psd-export");
             export.text = L10n.T("button.exportPsd");
             export.tooltip = L10n.T("tooltip.exportPsd");
@@ -481,15 +498,33 @@ namespace Dennoko.DTXTool
             import.tooltip = L10n.T("tooltip.importPsd");
             import.clicked += ImportPsd;
             root.Q<Label>("psd-hint").text = L10n.T("output.psdHint");
+
+            UiHub.Watch(root.Q("psd-card"), () =>
+            {
+                string linked = PsdLink.ResolvePath();
+                bool hasLink = !string.IsNullOrEmpty(linked);
+                Bind.Show(linkedRow, hasLink);
+                Bind.Show(overwritePsd, hasLink);
+                export.text = hasLink ? L10n.T("button.exportPsdAs") : L10n.T("button.exportPsd");
+                if (hasLink)
+                {
+                    linkedName.text = Path.GetFileName(linked);
+                    linkedName.tooltip = L10n.F("tooltip.linkedPsd", linked);
+                    overwritePsd.tooltip = L10n.F("tooltip.overwritePsd", linked);
+                }
+            });
         }
 
         private static void ExportPsd()
         {
             var s = SessionController.Current;
             if (s == null) return;
-            string dir = SessionState.GetString(LastPsdDirKey, Path.GetFullPath(OutputPaths.FolderFor(s)));
-            if (!Directory.Exists(dir)) dir = Application.dataPath;
-            string path = EditorUtility.SaveFilePanel(L10n.T("button.exportPsd"), dir, OutputPaths.BaseName(s), "psd");
+            string linked = PsdLink.ResolvePath();
+            string dir = !string.IsNullOrEmpty(linked) ? Path.GetDirectoryName(linked)
+                : SessionState.GetString(LastPsdDirKey, Path.GetFullPath(OutputPaths.FolderFor(s)));
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) dir = Application.dataPath;
+            string defaultName = !string.IsNullOrEmpty(linked) ? Path.GetFileNameWithoutExtension(linked) : OutputPaths.BaseName(s);
+            string path = EditorUtility.SaveFilePanel(L10n.T("button.exportPsd"), dir, defaultName, "psd");
             if (string.IsNullOrEmpty(path)) return;
             SessionState.SetString(LastPsdDirKey, Path.GetDirectoryName(path));
             SessionCommands.ExportPsd(path, MessageOrigin.Window);
@@ -499,8 +534,10 @@ namespace Dennoko.DTXTool
         {
             var s = SessionController.Current;
             if (s == null) return;
-            string dir = SessionState.GetString(LastPsdDirKey, Path.GetFullPath(OutputPaths.FolderFor(s)));
-            if (!Directory.Exists(dir)) dir = Application.dataPath;
+            string linked = PsdLink.ResolvePath();
+            string dir = !string.IsNullOrEmpty(linked) ? Path.GetDirectoryName(linked)
+                : SessionState.GetString(LastPsdDirKey, Path.GetFullPath(OutputPaths.FolderFor(s)));
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) dir = Application.dataPath;
             string path = EditorUtility.OpenFilePanel(L10n.T("button.importPsd"), dir, "psd");
             if (string.IsNullOrEmpty(path)) return;
             SessionState.SetString(LastPsdDirKey, Path.GetDirectoryName(path));

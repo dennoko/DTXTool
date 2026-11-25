@@ -277,9 +277,40 @@
     margin-left: 6px;
 }
 
-/* PSD の出力 / 読み込み（2 つを同じ幅で並べる） */
+/* PSD の参照表示・ワンクリック上書き保存・別名保存 / 読み込み */
+.dennoko-root .dtx-psd-linked {
+    align-items: center;
+    margin-top: 2px;
+    margin-bottom: 4px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    background-color: var(--dennoko-surface-0);
+    border-width: 1px;
+    border-color: var(--dennoko-outline-subtle);
+}
+
+.dennoko-root .dtx-psd-linked__icon {
+    flex-shrink: 0;
+    margin-right: 6px;
+}
+
+.dennoko-root .dtx-psd-linked__name {
+    font-size: 11px;
+    color: var(--dennoko-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 4px;
+}
+
+.dennoko-root .unity-button.dtx-psd-overwrite {
+    height: 28px;
+    margin: 2px 0 4px 0;
+    -unity-font-style: bold;
+}
+
 .dennoko-root .dtx-psd-row {
-    margin-top: 6px;
+    margin-top: 4px;
 }
 
 .dennoko-root .dtx-psd-row > .unity-button {

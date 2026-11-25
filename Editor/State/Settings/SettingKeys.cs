@@ -79,6 +79,8 @@ namespace Dennoko.DTXTool
         public static readonly Setting<string> BaseProperty = new Setting<string>("BaseProperty", "", T);
         public static readonly Setting<string> NormalProperty = new Setting<string>("NormalProperty", "", T);
         public static readonly Setting<string> OutputName = new Setting<string>("OutputName", "", T);
+        public static readonly Setting<string> LinkedPsdPath = new Setting<string>("LinkedPsdPath", "", T);
+        public static readonly Setting<string> LinkedPsdGuid = new Setting<string>("LinkedPsdGuid", "", T);
         public static readonly Setting<int> UVChannel = new Setting<int>("UVChannel", 0, T);
         public static readonly Setting<int> TargetSubmesh = new Setting<int>("TargetSubmesh", 0, T);
         public static readonly Setting<string> FileName = new Setting<string>("FileName", "", T);

@@ -117,6 +117,8 @@ namespace Dennoko.DTXTool.Tests
             Assert.IsNotNull(root.Q<Button>("layers-empty-all"));
             Assert.IsTrue(Shown(root, "layers-empty"), "empty state invites the first selection");
             Assert.IsTrue(Shown(root, "psd-card"));
+            Assert.IsFalse(Shown(root, "psd-linked-row"), "no PSD linked yet");
+            Assert.IsFalse(Shown(root, "psd-overwrite"), "no PSD linked yet");
             Assert.IsTrue(Shown(root, "output-dock"), "resolution and file name live above the footer");
             var exportBaseToggle = root.Q<Toggle>("export-base");
             var exportNormalToggle = root.Q<Toggle>("export-normal");

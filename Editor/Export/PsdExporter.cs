@@ -7,6 +7,53 @@ using UnityEngine;
 namespace Dennoko.DTXTool
 {
     /// <summary>
+    /// 読み込んだ／保存した PSD ファイルの参照（対象ごとに SettingsService の Target 層へ保持する）。
+    /// Assets 内であれば GUID 優先で解決し、ファイル移動やリネームにも追従する。
+    /// </summary>
+    internal static class PsdLink
+    {
+        public static string ResolvePath()
+        {
+            if (SessionController.Current == null) return null;
+            string guid = SettingsService.Get(SettingKeys.LinkedPsdGuid);
+            if (!string.IsNullOrEmpty(guid))
+            {
+                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                if (!string.IsNullOrEmpty(assetPath))
+                    return Path.GetFullPath(assetPath);
+            }
+            string path = SettingsService.Get(SettingKeys.LinkedPsdPath);
+            return string.IsNullOrWhiteSpace(path) ? null : path;
+        }
+
+        public static string ResolveAssetPath()
+        {
+            string path = ResolvePath();
+            return string.IsNullOrEmpty(path) ? null : PsdExporter.ToAssetPath(path);
+        }
+
+        public static void Set(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                Clear();
+                return;
+            }
+            string full = Path.GetFullPath(filePath);
+            SettingsService.Set(SettingKeys.LinkedPsdPath, full);
+            string assetPath = PsdExporter.ToAssetPath(full);
+            string guid = !string.IsNullOrEmpty(assetPath) ? AssetDatabase.AssetPathToGUID(assetPath) : string.Empty;
+            SettingsService.Set(SettingKeys.LinkedPsdGuid, guid ?? string.Empty);
+        }
+
+        public static void Clear()
+        {
+            SettingsService.ResetToLower(SettingKeys.LinkedPsdPath);
+            SettingsService.ResetToLower(SettingKeys.LinkedPsdGuid);
+        }
+    }
+
+    /// <summary>
     /// PSD の出力と読み込み（Docs/Impl/ARCHITECTURE.md §9）。
     ///   BaseMap フォルダ（表示）と NormalMap フォルダ（非表示）に、レイヤーをラスタライズして入れる。
     ///   復元情報は Image Resource ブロックに入れ、読み込みはそれだけを使う（画素のレイヤーは読まない）。
@@ -31,6 +78,9 @@ namespace Dennoko.DTXTool
                 var doc = DocumentHost.instance.Doc;
                 int size = Mathf.Clamp(doc.width, 16, 8192);
 
+                string dir = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
                 scratchPath = FileUtil.GetUniqueTempPathInProject();
                 using (var scratch = new FileStream(scratchPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None, 1 << 16))
                 using (var writer = new PsdWriter(size, size, scratch))
@@ -49,6 +99,7 @@ namespace Dennoko.DTXTool
                 DocumentAutoSave.FlushPending();
                 string assetPath = ToAssetPath(filePath);
                 if (assetPath != null) AssetDatabase.ImportAsset(assetPath);
+                PsdLink.Set(filePath);
                 Notifier.Post(new UserMessage
                 {
                     Level = MessageLevel.Success,
@@ -229,6 +280,7 @@ namespace Dennoko.DTXTool
             int missing = CountMissingTextures(doc);
             DtxModeController.Cancel();
             DocumentCommands.Replace(L10n.T("undo.loadPsd"), doc);
+            PsdLink.Set(filePath);
 
             string name = Path.GetFileName(filePath);
             if (lost > 0) Notifier.Post(MessageLevel.Warning, L10n.F("status.psdLoadedMeshChanged", name, lost), origin);

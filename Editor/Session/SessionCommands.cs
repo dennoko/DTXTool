@@ -164,6 +164,15 @@ namespace Dennoko.DTXTool
             PsdExporter.Export(S, filePath, origin);
         }
 
+        public static bool OverwriteLinkedPsd(MessageOrigin origin)
+        {
+            if (S == null) return false;
+            string path = PsdLink.ResolvePath();
+            if (string.IsNullOrEmpty(path)) return false;
+            if (DtxModeController.IsSelecting) DtxModeController.Cancel();
+            return PsdExporter.Export(S, path, origin);
+        }
+
         public static void ImportPsd(string filePath, MessageOrigin origin)
         {
             if (S == null) return;
