@@ -120,6 +120,16 @@ namespace Dennoko.DTXTool.Core
             }
         }
 
+        public static LayerVariation CloneVariation(LayerVariation variation)
+        {
+            using (var ms = new MemoryStream())
+            {
+                using (var w = new BinaryWriter(ms, Encoding.UTF8, true)) WriteVariation(w, variation);
+                ms.Position = 0;
+                using (var r = new BinaryReader(ms, Encoding.UTF8)) return ReadVariation(r);
+            }
+        }
+
         /// <summary>内容のハッシュ（Undo で書き戻されたかの判定や、キャッシュのキーに使う）。</summary>
         public static ulong Hash(Layer layer)
         {
@@ -134,6 +144,7 @@ namespace Dennoko.DTXTool.Core
 
         private static void WriteDocument(BinaryWriter w, DtxDocument d)
         {
+            d.EnsureVariations();
             Chunk(w, c =>
             {
                 c.Write(d.width);
@@ -143,8 +154,27 @@ namespace Dennoko.DTXTool.Core
                 c.Write(d.triangleCount);
                 c.Write(d.submeshIndex);
                 c.Write(d.targetName ?? string.Empty);
+                c.Write((int)d.editMode);
             });
-            var bg = d.background ?? new Background();
+            // 先頭位置にはアクティブなバリエーションの下地とレイヤーを書く（旧バージョンとの互換用）
+            var active = d.ActiveVariation;
+            WriteBackground(w, active.background);
+            w.Write(active.layers != null ? active.layers.Count : 0);
+            if (active.layers != null)
+                foreach (var l in active.layers) WriteLayer(w, l);
+
+            // 末尾に全バリエーションをチャンクとして追加する
+            Chunk(w, vc =>
+            {
+                vc.Write(d.activeVariationIndex);
+                vc.Write(d.variations.Count);
+                foreach (var v in d.variations) WriteVariation(vc, v);
+            });
+        }
+
+        private static void WriteBackground(BinaryWriter w, Background bg)
+        {
+            bg ??= new Background();
             Chunk(w, c =>
             {
                 c.Write((int)bg.baseKind);
@@ -153,9 +183,20 @@ namespace Dennoko.DTXTool.Core
                 c.Write((int)bg.normalKind);
                 Write(c, bg.normalTexture);
             });
-            w.Write(d.layers != null ? d.layers.Count : 0);
-            if (d.layers != null)
-                foreach (var l in d.layers) WriteLayer(w, l);
+        }
+
+        private static void WriteVariation(BinaryWriter w, LayerVariation v)
+        {
+            v ??= new LayerVariation();
+            Chunk(w, c =>
+            {
+                c.Write(v.id ?? string.Empty);
+                c.Write(v.name ?? string.Empty);
+                WriteBackground(c, v.background);
+                c.Write(v.layers != null ? v.layers.Count : 0);
+                if (v.layers != null)
+                    foreach (var l in v.layers) WriteLayer(c, l);
+            });
         }
 
         private static void WriteLayer(BinaryWriter w, Layer l)
@@ -339,21 +380,63 @@ namespace Dennoko.DTXTool.Core
                 d.triangleCount = c.Int();
                 d.submeshIndex = c.Int(-1);
                 d.targetName = c.String();
+                d.editMode = (EditMode)c.Int((int)EditMode.BaseAndNormal);
             }
             if (d.width < 1 || d.height < 1 || d.width > 16384 || d.height > 16384) throw new InvalidDataException("bad size");
+            d.background = ReadBackground(r);
+            int count = r.ReadInt32();
+            if (count < 0 || count > 4096) throw new InvalidDataException("bad layer count");
+            for (int i = 0; i < count; i++) d.layers.Add(ReadLayer(r));
+
+            // バリエーションチャンクがあればそちらで全バリエーションを復元する（無い旧形式はそのまま 1 バリエーションになる）
+            if (r.BaseStream.Position < r.BaseStream.Length)
+            {
+                using (var vc = new ChunkReader(r))
+                {
+                    int activeIndex = vc.Int();
+                    int vCount = vc.Int();
+                    if (vCount < 1 || vCount > 256) throw new InvalidDataException("bad variation count");
+                    d.variations.Clear();
+                    for (int i = 0; i < vCount; i++) d.variations.Add(ReadVariation(vc.R));
+                    d.activeVariationIndex = activeIndex;
+                }
+            }
+            d.EnsureVariations();
+            return d;
+        }
+
+        private static Background ReadBackground(BinaryReader r)
+        {
+            var bg = new Background();
             using (var c = new ChunkReader(r))
             {
-                var bg = d.background;
                 bg.baseKind = (BackgroundBaseKind)c.Int();
                 bg.color = c.Color(Color.white);
                 bg.baseTexture = c.Texture();
                 bg.normalKind = (BackgroundNormalKind)c.Int();
                 bg.normalTexture = c.Texture();
             }
-            int count = r.ReadInt32();
-            if (count < 0 || count > 4096) throw new InvalidDataException("bad layer count");
-            for (int i = 0; i < count; i++) d.layers.Add(ReadLayer(r));
-            return d;
+            return bg;
+        }
+
+        private static LayerVariation ReadVariation(BinaryReader r)
+        {
+            var v = new LayerVariation();
+            using (var c = new ChunkReader(r))
+            {
+                v.id = c.String();
+                v.name = c.String();
+                if (c.More) v.background = ReadBackground(c.R);
+                if (c.More)
+                {
+                    int count = c.Int();
+                    if (count < 0 || count > 4096) throw new InvalidDataException("bad layer count");
+                    for (int i = 0; i < count; i++) v.layers.Add(ReadLayer(c.R));
+                }
+            }
+            if (string.IsNullOrEmpty(v.id)) v.id = LayerVariation.NewId();
+            if (string.IsNullOrWhiteSpace(v.name)) v.name = LayerVariation.DefaultNamePrefix + " 1";
+            return v;
         }
 
         private static Layer ReadLayer(BinaryReader r)

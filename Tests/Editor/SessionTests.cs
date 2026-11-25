@@ -663,26 +663,27 @@ namespace Dennoko.DTXTool.Tests
             Assert.IsTrue(File.Exists(_psdPath));
             Assert.AreSame(s.Renderer.PreviewBase, _material.GetTexture("_MainTex"), "preview is back after exporting");
 
-            // 構造: BaseMap フォルダ（表示）と NormalMap フォルダ（非表示）
+            // 構造: バリエーションフォルダの中に BaseMap フォルダ（表示）と NormalMap フォルダ（非表示）
             var psd = PsdReader.Read(File.ReadAllBytes(_psdPath), true);
             Assert.AreEqual(Size, psd.Width);
             var names = new System.Collections.Generic.List<string>();
             foreach (var l in psd.Layers) names.Add(l.SectionType == 3 ? "</>" : l.Name);
-            CollectionAssert.AreEqual(new[] { "</>", "Background", "布 Cloth", "Top", "BaseMap", "</>", "Background", "布 Cloth", "NormalMap" }, names);
-            Assert.IsTrue(psd.Layers[4].Visible);
-            Assert.IsFalse(psd.Layers[8].Visible, "NormalMap folder is hidden");
+            CollectionAssert.AreEqual(new[] { "</>", "</>", "Background", "布 Cloth", "Top", "BaseMap", "</>", "Background", "布 Cloth", "NormalMap", "Variation 1" }, names);
+            Assert.IsTrue(psd.Layers[5].Visible, "BaseMap folder is visible");
+            Assert.IsFalse(psd.Layers[9].Visible, "NormalMap folder is hidden");
+            Assert.IsTrue(psd.Layers[10].Visible, "active variation folder is visible");
 
-            var cloth = psd.Layers[2];
+            var cloth = psd.Layers[3];
             Assert.AreEqual("mul ", cloth.BlendKey);
             Assert.AreEqual(128, cloth.Opacity);
             Assert.IsTrue(cloth.Visible);
-            Assert.IsFalse(psd.Layers[3].Visible, "hidden layer stays hidden in the PSD");
+            Assert.IsFalse(psd.Layers[4].Visible, "hidden layer stays hidden in the PSD");
             // PSD は行 0 が上端。レイヤーの画素は全面の質感、マスクが範囲
             AssertRed(Pixel(cloth.Rgba, Size, Right, Mid), "layer pixels are the full-canvas fill");
             Assert.AreEqual(255, cloth.Mask[Mid * Size + Left], "mask covers quad A");
             Assert.AreEqual(0, cloth.Mask[Mid * Size + Right], "mask excludes quad B");
-            AssertBlue(Pixel(psd.Layers[1].Rgba, Size, Left, Mid), "background layer");
-            var flat = Pixel(psd.Layers[7].Rgba, Size, Left, Mid);
+            AssertBlue(Pixel(psd.Layers[2].Rgba, Size, Left, Mid), "background layer");
+            var flat = Pixel(psd.Layers[8].Rgba, Size, Left, Mid);
             Assert.AreEqual(128, flat.r, 1);
             Assert.AreEqual(255, flat.b, 1);
             // 統合画像 = BaseMap の合成結果（赤 × 青の乗算 50% → 青が残り赤が乗らない）
@@ -720,6 +721,53 @@ namespace Dennoko.DTXTool.Tests
             s.Tick();
             AssertRed(PreviewPixel(s, Left, Mid), "left quad covered");
             AssertRed(PreviewPixel(s, Right, Mid), "right quad covered");
+        }
+
+        [Test]
+        public void Psd_MultipleVariationsNestFoldersAndSupportOneClickOverwrite()
+        {
+            var s = Start();
+            var red = AddRedLayer(s, 0, 1);
+            DocumentCommands.EditLayer(red.id, "setup", l => l.replaceNormal = true);
+            DocumentCommands.RenameVariation("rename", 0, "Red");
+
+            // バリエーション追加（直前を複製）→ 色と下地を差し替える
+            var v2 = DocumentCommands.AddVariation("add var");
+            DocumentCommands.RenameVariation("rename2", 1, "Green");
+            DocumentCommands.EditSelected("green", l => l.color = Color.green);
+            DocumentCommands.EditBackground("bg", b => b.color = Color.black);
+            s.Tick();
+            Assert.AreEqual(255, PreviewPixel(s, Left, Mid).g, 2, "preview shows active variation (Green)");
+
+            // 初回保存 → PSD 参照が保持される
+            Assert.IsTrue(PsdExporter.Export(s, _psdPath, MessageOrigin.Window));
+            Assert.AreEqual(Path.GetFullPath(_psdPath), PsdLink.ResolvePath());
+
+            var psd = PsdReader.Read(File.ReadAllBytes(_psdPath), true);
+            var names = new System.Collections.Generic.List<string>();
+            foreach (var l in psd.Layers) names.Add(l.SectionType == 3 ? "</>" : l.Name);
+            // PSD は下から上なので、後ろのバリエーション（Green）が先、先頭バリエーション（Red）が後に書かれる
+            CollectionAssert.AreEqual(new[]
+            {
+                "</>", "</>", "Background", "Red", "BaseMap", "</>", "Background", "Red", "NormalMap", "Green",
+                "</>", "</>", "Background", "Red", "BaseMap", "</>", "Background", "Red", "NormalMap", "Red",
+            }, names);
+            Assert.IsTrue(psd.Layers[9].Visible, "active variation (Green) folder is visible");
+            Assert.IsFalse(psd.Layers[19].Visible, "inactive variation (Red) folder is hidden");
+
+            // ワンクリック上書き保存: Red に切り替えて上書き保存すると Red が表示状態になる
+            DocumentCommands.SelectVariation("switch", 0);
+            Assert.IsTrue(SessionCommands.OverwriteLinkedPsd(MessageOrigin.Window));
+            var overwritten = PsdReader.Read(File.ReadAllBytes(_psdPath), false);
+            Assert.IsFalse(overwritten.Layers[9].Visible, "Green is now hidden");
+            Assert.IsTrue(overwritten.Layers[19].Visible, "Red is now visible");
+
+            // 再読み込みで両方のバリエーションが復元される
+            var expected = DocumentCodec.Clone(DocumentHost.instance.Doc);
+            DocumentCommands.DeleteVariation("del", 1);
+            Assert.AreEqual(1, DocumentHost.instance.Doc.variations.Count);
+            Assert.IsTrue(PsdImporter.Import(s, _psdPath, MessageOrigin.Window));
+            CoreDocumentTests.AssertSame(expected, DocumentHost.instance.Doc);
         }
 
         [Test]

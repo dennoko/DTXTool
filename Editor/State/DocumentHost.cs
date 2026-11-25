@@ -46,6 +46,7 @@ namespace Dennoko.DTXTool
         private void OnUndoRedo()
         {
             DocumentOps.MigrateLegacy(Doc);
+            EnsureSelectedValid();
             Touch();
         }
 
@@ -56,8 +57,14 @@ namespace Dennoko.DTXTool
             document = doc ?? new DtxDocument();
             DocumentOps.MigrateLegacy(document);
             targetKey = key ?? string.Empty;
-            if (selectedLayerId != BackgroundId && document.IndexOf(selectedLayerId) < 0)
-                selectedLayerId = document.layers.Count > 0 ? document.layers[document.layers.Count - 1].id : string.Empty;
+            EnsureSelectedValid();
+        }
+
+        internal void EnsureSelectedValid()
+        {
+            var doc = Doc;
+            if (selectedLayerId != BackgroundId && doc.IndexOf(selectedLayerId) < 0)
+                selectedLayerId = doc.layers.Count > 0 ? doc.layers[doc.layers.Count - 1].id : string.Empty;
         }
 
         internal void SetSelected(string layerId) => selectedLayerId = layerId ?? string.Empty;

@@ -89,11 +89,15 @@ namespace Dennoko.DTXTool
 
         /// <summary>下地だけを描く（PSD の Background レイヤー用）。</summary>
         public void RenderBackground(DtxDocument doc, int size, ICompositeSource source)
+            => RenderBackground(doc.background, size, source);
+
+        /// <summary>指定した下地だけを描く（バリエーション別の PSD 出力用）。</summary>
+        public void RenderBackground(Background background, int size, ICompositeSource source)
         {
             EnsureTargets(size);
             var prev = RenderTexture.active;
-            InitBase(doc.background, source, _baseA);
-            InitNormal(doc.background, source, _normalA);
+            InitBase(background, source, _baseA);
+            InitNormal(background, source, _normalA);
             RenderTexture.active = prev;
         }
 

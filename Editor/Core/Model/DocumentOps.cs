@@ -74,29 +74,84 @@ namespace Dennoko.DTXTool.Core
         }
 
         /// <summary>
+        /// 現在のバリエーションを複製して末尾に追加し、そのバリエーションをアクティブにする。
+        /// 複製されたレイヤーには新しい ID を振る。
+        /// </summary>
+        public static LayerVariation AddVariation(DtxDocument doc, string name = null)
+        {
+            doc.EnsureVariations();
+            var source = doc.ActiveVariation;
+            var copy = DocumentCodec.CloneVariation(source);
+            copy.id = LayerVariation.NewId();
+            copy.name = doc.UniqueVariationName(string.IsNullOrWhiteSpace(name) ? source.name : name);
+            foreach (var l in copy.layers) l.id = Layer.NewId();
+            doc.variations.Add(copy);
+            doc.activeVariationIndex = doc.variations.Count - 1;
+            return copy;
+        }
+
+        /// <summary>アクティブなバリエーションを切り替える。変わったら true。</summary>
+        public static bool SelectVariation(DtxDocument doc, int index)
+        {
+            doc.EnsureVariations();
+            index = Math.Max(0, Math.Min(doc.variations.Count - 1, index));
+            if (index == doc.activeVariationIndex) return false;
+            doc.activeVariationIndex = index;
+            return true;
+        }
+
+        /// <summary>バリエーションの名前を変える。変わったら true。</summary>
+        public static bool RenameVariation(DtxDocument doc, int index, string newName)
+        {
+            doc.EnsureVariations();
+            if (index < 0 || index >= doc.variations.Count || string.IsNullOrWhiteSpace(newName)) return false;
+            string unique = doc.UniqueVariationName(newName.Trim(), index);
+            if (string.Equals(doc.variations[index].name, unique, StringComparison.Ordinal)) return false;
+            doc.variations[index].name = unique;
+            return true;
+        }
+
+        /// <summary>バリエーションを削除する（1 件だけの時は削除しない）。削除できたら true。</summary>
+        public static bool DeleteVariation(DtxDocument doc, int index)
+        {
+            doc.EnsureVariations();
+            if (doc.variations.Count <= 1 || index < 0 || index >= doc.variations.Count) return false;
+            doc.variations.RemoveAt(index);
+            if (doc.activeVariationIndex >= doc.variations.Count)
+                doc.activeVariationIndex = doc.variations.Count - 1;
+            else if (index < doc.activeVariationIndex)
+                doc.activeVariationIndex--;
+            return true;
+        }
+
+        /// <summary>
         /// 対象メッシュに合わせる。選択三角形はメッシュが同じ時だけ使えるので、違っていたら
         /// 埋め込みラスターがあればそれに切り替え、無ければ空の選択にする。戻り値は選択を復元できなかったレイヤーの数。
         /// </summary>
         public static int AdaptToMesh(DtxDocument doc, long meshHash, int triangleCount)
         {
+            doc.EnsureVariations();
             bool same = doc.meshHash == meshHash && doc.triangleCount == triangleCount;
             int words = TriangleBits.WordCount(triangleCount);
             int lost = 0;
-            foreach (var l in doc.layers)
+            foreach (var v in doc.variations)
             {
-                var m = l.mask;
-                if (m.source != MaskSource.Selection) continue;
-                if (same && m.selectedBits != null && m.selectedBits.Length == words)
+                foreach (var l in v.layers)
                 {
-                    // 選択が使えるので控えのラスターは要らない
-                    m.embedded = Array.Empty<byte>();
-                    m.embeddedSize = 0;
-                    continue;
+                    var m = l.mask;
+                    if (m.source != MaskSource.Selection) continue;
+                    if (same && m.selectedBits != null && m.selectedBits.Length == words)
+                    {
+                        // 選択が使えるので控えのラスターは要らない
+                        m.embedded = Array.Empty<byte>();
+                        m.embeddedSize = 0;
+                        continue;
+                    }
+                    lost++;
+                    m.selectedBits = new int[words];
+                    m.paintRle = Array.Empty<byte>();
+                    if (m.HasEmbedded) m.source = MaskSource.Embedded;
                 }
-                lost++;
-                m.selectedBits = new int[words];
-                m.paintRle = Array.Empty<byte>();
-                if (m.HasEmbedded) m.source = MaskSource.Embedded;
             }
             doc.meshHash = meshHash;
             doc.triangleCount = triangleCount;
@@ -123,8 +178,11 @@ namespace Dennoko.DTXTool.Core
         public static bool MigrateLegacy(DtxDocument doc)
         {
             bool changed = false;
-            if (doc?.layers == null) return false;
-            foreach (var l in doc.layers) changed |= MigrateLegacy(l);
+            if (doc == null) return false;
+            doc.EnsureVariations();
+            foreach (var v in doc.variations)
+                foreach (var l in v.layers)
+                    changed |= MigrateLegacy(l);
             return changed;
         }
 

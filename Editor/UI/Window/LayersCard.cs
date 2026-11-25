@@ -27,6 +27,22 @@ namespace Dennoko.DTXTool
             Notifier.Post(MessageLevel.Success, L10n.F("status.layerAdded", layer.name), origin);
         }
 
+        public static void AddVariation(MessageOrigin origin)
+        {
+            if (SessionController.Current == null) return;
+            var added = DocumentCommands.AddVariation(L10n.T("undo.addVariation"));
+            if (added != null) Notifier.Post(MessageLevel.Success, L10n.F("status.variationAdded", added.name), origin);
+        }
+
+        public static void DeleteActiveVariation()
+        {
+            if (SessionController.Current == null) return;
+            var doc = H.Doc;
+            doc.EnsureVariations();
+            if (doc.variations.Count <= 1) return;
+            DocumentCommands.DeleteVariation(L10n.T("undo.deleteVariation"), doc.activeVariationIndex);
+        }
+
         /// <summary>マスク画像からレイヤーを作る（外部で作ったマスクのドラッグ＆ドロップ）。</summary>
         public static void AddImageMaskLayer(Texture2D mask, MessageOrigin origin)
         {
@@ -78,7 +94,13 @@ namespace Dennoko.DTXTool
     {
         private readonly VisualElement _list;
         private readonly VisualElement _empty;
+        private readonly DropdownField _variationSelect;
+        private readonly Button _variationDelete;
+        private readonly VisualElement _variationRenameRow;
+        private readonly TextField _variationNameField;
         private readonly Button _duplicate, _up, _down, _delete;
+        private bool _renamingVariation;
+        private string _renamingVariationId;
         private string _builtKey;
 
         public LayersCard(VisualElement root)
@@ -87,6 +109,56 @@ namespace Dennoko.DTXTool
             _empty = root.Q("layers-empty");
             root.Q<Label>("layers-header").text = L10n.T("layers.header");
             root.Q<Label>("layers-empty-message").text = L10n.T("layers.empty");
+
+            // バリエーション選択バー（レイヤーセクションの一番上）
+            root.Q<Label>("variation-label").text = L10n.T("variation.label");
+            _variationSelect = root.Q<DropdownField>("variation-select");
+            _variationSelect.tooltip = L10n.T("tooltip.variationSelect");
+            _variationSelect.RegisterValueChangedCallback(e =>
+            {
+                if (e.target != _variationSelect || _variationSelect.index < 0) return;
+                _renamingVariation = false;
+                DocumentCommands.SelectVariation(L10n.T("undo.selectVariation"), _variationSelect.index);
+            });
+            var varAdd = DennokoIcons.Apply(root.Q<Button>("variation-add"), DennokoIcons.Plus, "+", L10n.T("tooltip.addVariation"));
+            varAdd.clicked += () =>
+            {
+                _renamingVariation = false;
+                LayerActions.AddVariation(MessageOrigin.Window);
+            };
+            var varRename = DennokoIcons.Apply(root.Q<Button>("variation-rename"), Icons.Reselect, "E", L10n.T("tooltip.renameVariation"));
+            varRename.clicked += ToggleRenameVariation;
+            _variationDelete = DennokoIcons.Apply(root.Q<Button>("variation-delete"), Icons.Clear, "×", L10n.T("tooltip.deleteVariation"));
+            _variationDelete.clicked += () =>
+            {
+                _renamingVariation = false;
+                LayerActions.DeleteActiveVariation();
+            };
+
+            _variationRenameRow = root.Q("variation-rename-row");
+            _variationNameField = root.Q<TextField>("variation-name");
+            _variationNameField.RegisterCallback<KeyDownEvent>(e =>
+            {
+                if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
+                {
+                    CommitRenameVariation();
+                    e.StopPropagation();
+                }
+                else if (e.keyCode == KeyCode.Escape)
+                {
+                    _renamingVariation = false;
+                    UiHub.Raise();
+                    e.StopPropagation();
+                }
+            });
+            var varRenameOk = DennokoIcons.Apply(root.Q<Button>("variation-rename-ok"), Icons.Confirm, "OK", L10n.T("button.confirm"));
+            varRenameOk.clicked += CommitRenameVariation;
+            var varRenameCancel = DennokoIcons.Apply(root.Q<Button>("variation-rename-cancel"), Icons.Cancel, "×", L10n.T("button.cancel"));
+            varRenameCancel.clicked += () =>
+            {
+                _renamingVariation = false;
+                UiHub.Raise();
+            };
 
             var add = DennokoIcons.Apply(root.Q<Button>("layer-add"), DennokoIcons.Plus, "+", L10n.T("tooltip.addLayer"));
             add.clicked += DtxModeController.BeginSelectNew;
@@ -176,12 +248,48 @@ namespace Dennoko.DTXTool
             return null;
         }
 
+        private void ToggleRenameVariation()
+        {
+            var doc = DocumentHost.instance.Doc;
+            doc.EnsureVariations();
+            if (_renamingVariation)
+            {
+                _renamingVariation = false;
+                UiHub.Raise();
+                return;
+            }
+            _renamingVariation = true;
+            _renamingVariationId = doc.ActiveVariation.id;
+            _variationNameField.SetValueWithoutNotify(doc.ActiveVariation.name);
+            UiHub.Raise();
+            _variationNameField.schedule.Execute(() => _variationNameField.Focus());
+        }
+
+        private void CommitRenameVariation()
+        {
+            var doc = DocumentHost.instance.Doc;
+            doc.EnsureVariations();
+            _renamingVariation = false;
+            DocumentCommands.RenameVariation(L10n.T("undo.renameVariation"), doc.activeVariationIndex, _variationNameField.value);
+            UiHub.Raise();
+        }
+
         private void Refresh()
         {
             var host = DocumentHost.instance;
             var doc = host.Doc;
             bool working = SessionController.Current != null;
             if (!working) return;
+            doc.EnsureVariations();
+
+            // バリエーション一覧を同期
+            var varNames = new List<string>(doc.variations.Count);
+            foreach (var v in doc.variations) varNames.Add(v.name);
+            _variationSelect.choices = varNames;
+            _variationSelect.SetValueWithoutNotify(doc.ActiveVariation.name);
+            _variationDelete.SetEnabled(doc.variations.Count > 1);
+            if (_renamingVariation && doc.ActiveVariation.id != _renamingVariationId) _renamingVariation = false;
+            Bind.Show(_variationRenameRow, _renamingVariation);
 
             int index = doc.IndexOf(host.SelectedLayerId);
             bool hasLayer = index >= 0;
@@ -204,7 +312,8 @@ namespace Dennoko.DTXTool
         private static string BuildKey(DtxDocument doc, string selected)
         {
             var sb = new StringBuilder(256);
-            sb.Append(selected).Append('|').Append(L10n.Japanese ? 'j' : 'e').Append('|')
+            sb.Append(doc.activeVariationIndex).Append('|').Append(doc.ActiveVariation.id).Append('|')
+              .Append(selected).Append('|').Append(L10n.Japanese ? 'j' : 'e').Append('|')
               .Append(DtxModeController.Mode).Append(DtxModeController.EditingLayerId).Append('|');
             foreach (var l in doc.layers)
             {

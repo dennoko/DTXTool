@@ -89,6 +89,55 @@ namespace Dennoko.DTXTool
             H.Touch();
         }
 
+        // ── バリエーション ──
+
+        public static LayerVariation AddVariation(string undoName, string name = null)
+        {
+            DtxModeController.Cancel();
+            Undo.RecordObject(H, undoName);
+            var added = DocumentOps.AddVariation(H.Doc, name);
+            H.EnsureSelectedValid();
+            H.Touch();
+            return added;
+        }
+
+        public static void SelectVariation(string undoName, int index)
+        {
+            var doc = H.Doc;
+            doc.EnsureVariations();
+            index = Mathf.Clamp(index, 0, doc.variations.Count - 1);
+            if (index == doc.activeVariationIndex) return;
+            DtxModeController.Cancel();
+            Undo.RecordObject(H, undoName);
+            DocumentOps.SelectVariation(doc, index);
+            H.EnsureSelectedValid();
+            H.Touch();
+        }
+
+        public static void RenameVariation(string undoName, int index, string newName)
+        {
+            var doc = H.Doc;
+            doc.EnsureVariations();
+            if (index < 0 || index >= doc.variations.Count || string.IsNullOrWhiteSpace(newName)) return;
+            string unique = doc.UniqueVariationName(newName.Trim(), index);
+            if (string.Equals(doc.variations[index].name, unique, StringComparison.Ordinal)) return;
+            Undo.RecordObject(H, undoName);
+            DocumentOps.RenameVariation(doc, index, newName);
+            H.Touch();
+        }
+
+        public static void DeleteVariation(string undoName, int index)
+        {
+            var doc = H.Doc;
+            doc.EnsureVariations();
+            if (doc.variations.Count <= 1 || index < 0 || index >= doc.variations.Count) return;
+            DtxModeController.Cancel();
+            Undo.RecordObject(H, undoName);
+            DocumentOps.DeleteVariation(doc, index);
+            H.EnsureSelectedValid();
+            H.Touch();
+        }
+
         /// <summary>ドキュメントごと差し替える（PSD の読み込み）。Ctrl+Z で読み込む前に戻せる。</summary>
         public static void Replace(string undoName, DtxDocument doc)
         {

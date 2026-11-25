@@ -162,6 +162,33 @@ namespace Dennoko.DTXTool.Core
 
         public BackgroundNormalKind normalKind = BackgroundNormalKind.Flat;
         public TextureRef normalTexture = new TextureRef();
+
+        public Background Clone() => new Background
+        {
+            baseKind = baseKind,
+            color = color,
+            baseTexture = baseTexture != null ? baseTexture.Clone() : new TextureRef(),
+            normalKind = normalKind,
+            normalTexture = normalTexture != null ? normalTexture.Clone() : new TextureRef(),
+        };
+    }
+
+    /// <summary>
+    /// レイヤーのバリエーション（カラーバリエーションなど）。
+    /// 各バリエーションが独立した下地とレイヤー一覧を持ち、PSD ではフォルダとして入れ子になる。
+    /// </summary>
+    [Serializable]
+    public sealed class LayerVariation
+    {
+        public const string DefaultNamePrefix = "Variation";
+
+        public string id = string.Empty;
+        public string name = DefaultNamePrefix + " 1";
+        public Background background = new Background();
+        /// <summary>添字 0 が最下層。</summary>
+        public List<Layer> layers = new List<Layer>();
+
+        public static string NewId() => Guid.NewGuid().ToString("N");
     }
 
     /// <summary>
@@ -186,15 +213,80 @@ namespace Dennoko.DTXTool.Core
         public int submeshIndex = -1;
         public string targetName = string.Empty;
 
-        public Background background = new Background();
-        /// <summary>添字 0 が最下層。</summary>
-        public List<Layer> layers = new List<Layer>();
+        /// <summary>バリエーション一覧（常に 1 件以上）。</summary>
+        public List<LayerVariation> variations = new List<LayerVariation>();
+        /// <summary>現在編集・プレビュー中のバリエーションの添字。</summary>
+        public int activeVariationIndex;
+
+        // 旧形式（単一バリエーション時代）のメモリ上ドキュメントをドメインリロードや Undo から移行するための受け皿。
+        [SerializeField, FormerlySerializedAs("background")] private Background legacyBackground;
+        [SerializeField, FormerlySerializedAs("layers")] private List<Layer> legacyLayers;
+
+        public DtxDocument()
+        {
+            EnsureVariations();
+        }
+
+        /// <summary>バリエーション一覧が常に 1 件以上あり、activeVariationIndex が範囲内になるよう整える。</summary>
+        public void EnsureVariations()
+        {
+            variations ??= new List<LayerVariation>();
+            if (variations.Count == 0)
+            {
+                var v = new LayerVariation
+                {
+                    id = LayerVariation.NewId(),
+                    name = LayerVariation.DefaultNamePrefix + " 1",
+                    background = legacyBackground ?? new Background(),
+                    layers = legacyLayers ?? new List<Layer>(),
+                };
+                legacyBackground = null;
+                legacyLayers = null;
+                variations.Add(v);
+            }
+            for (int i = 0; i < variations.Count; i++)
+            {
+                var v = variations[i];
+                if (v == null)
+                {
+                    variations[i] = v = new LayerVariation { id = LayerVariation.NewId(), name = LayerVariation.DefaultNamePrefix + " " + (i + 1) };
+                }
+                if (string.IsNullOrEmpty(v.id)) v.id = LayerVariation.NewId();
+                if (string.IsNullOrWhiteSpace(v.name)) v.name = LayerVariation.DefaultNamePrefix + " " + (i + 1);
+                v.background ??= new Background();
+                v.layers ??= new List<Layer>();
+            }
+            activeVariationIndex = Mathf.Clamp(activeVariationIndex, 0, variations.Count - 1);
+        }
+
+        public LayerVariation ActiveVariation
+        {
+            get
+            {
+                EnsureVariations();
+                return variations[activeVariationIndex];
+            }
+        }
+
+        public Background background
+        {
+            get => ActiveVariation.background;
+            set => ActiveVariation.background = value ?? new Background();
+        }
+
+        /// <summary>現在のバリエーションのレイヤー一覧（添字 0 が最下層）。</summary>
+        public List<Layer> layers
+        {
+            get => ActiveVariation.layers;
+            set => ActiveVariation.layers = value ?? new List<Layer>();
+        }
 
         public int IndexOf(string layerId)
         {
             if (string.IsNullOrEmpty(layerId)) return -1;
-            for (int i = 0; i < layers.Count; i++)
-                if (layers[i].id == layerId) return i;
+            var list = layers;
+            for (int i = 0; i < list.Count; i++)
+                if (list[i].id == layerId) return i;
             return -1;
         }
 
@@ -208,15 +300,46 @@ namespace Dennoko.DTXTool.Core
         public string UniqueName(string baseName)
         {
             if (string.IsNullOrEmpty(baseName)) baseName = "Layer";
+            var list = layers;
             bool Exists(string n)
             {
-                foreach (var l in layers) if (l.name == n) return true;
+                foreach (var l in list) if (l.name == n) return true;
                 return false;
             }
             if (!Exists(baseName)) return baseName;
             for (int i = 2; ; i++)
             {
                 string n = baseName + " " + i;
+                if (!Exists(n)) return n;
+            }
+        }
+
+        /// <summary>既にあるバリエーション名と重ならない名前（「Variation 1」→「Variation 2」…）。</summary>
+        public string UniqueVariationName(string baseName, int excludeIndex = -1)
+        {
+            EnsureVariations();
+            if (string.IsNullOrWhiteSpace(baseName)) baseName = LayerVariation.DefaultNamePrefix + " 1";
+            baseName = baseName.Trim();
+            bool Exists(string n)
+            {
+                for (int i = 0; i < variations.Count; i++)
+                    if (i != excludeIndex && string.Equals(variations[i].name, n, StringComparison.Ordinal)) return true;
+                return false;
+            }
+            if (!Exists(baseName)) return baseName;
+
+            // 末尾が「 数値」なら、その数値を繰り上げて自然な連番にする
+            string prefix = baseName;
+            int start = 2;
+            int space = baseName.LastIndexOf(' ');
+            if (space > 0 && space + 1 < baseName.Length && int.TryParse(baseName.Substring(space + 1), out int num) && num >= 1)
+            {
+                prefix = baseName.Substring(0, space);
+                start = num + 1;
+            }
+            for (int i = start; ; i++)
+            {
+                string n = prefix + " " + i;
                 if (!Exists(n)) return n;
             }
         }

@@ -104,8 +104,22 @@
             <ui:VisualElement name="select-keys" class="dtx-keyhints" />
         </ui:VisualElement>
 
-        <!-- レイヤー一覧（上が最上段。最下段は下地）。選択中のレイヤーの名前・ブレンド・不透明度もここで変える -->
+        <!-- レイヤー一覧（上が最上段。最下段は下地）。一番上にバリエーション選択を置く -->
         <ui:VisualElement name="layers-card" class="dennoko-card dtx-layers-card">
+            <ui:VisualElement name="variation-bar" class="dtx-variation-bar">
+                <ui:VisualElement class="dennoko-hrow dtx-variation-bar__row">
+                    <ui:Label name="variation-label" text="バリエーション" class="dtx-variation-bar__label" />
+                    <ui:DropdownField name="variation-select" class="dennoko-col-grow dtx-variation-bar__select" />
+                    <ui:Button name="variation-add" class="dennoko-icon-button" />
+                    <ui:Button name="variation-rename" class="dennoko-icon-button" />
+                    <ui:Button name="variation-delete" class="dennoko-icon-button" />
+                </ui:VisualElement>
+                <ui:VisualElement name="variation-rename-row" class="dennoko-hrow dtx-variation-bar__rename">
+                    <ui:TextField name="variation-name" class="dennoko-col-grow" />
+                    <ui:Button name="variation-rename-ok" class="dennoko-icon-button" />
+                    <ui:Button name="variation-rename-cancel" class="dennoko-icon-button" />
+                </ui:VisualElement>
+            </ui:VisualElement>
             <ui:VisualElement class="dennoko-card-header dennoko-card-header--row">
                 <ui:Label name="layers-header" text="レイヤー" class="dennoko-section-title dennoko-card-header__title" />
                 <ui:Button name="layer-add" class="dennoko-icon-button" />

@@ -105,14 +105,18 @@ namespace Dennoko.DTXTool
                 if (string.IsNullOrEmpty(p)) p = r.path;
                 if (!string.IsNullOrEmpty(p)) used.Add(p);
             }
-            Add(doc.background.baseTexture);
-            Add(doc.background.normalTexture);
-            foreach (var l in doc.layers)
+            doc.EnsureVariations();
+            foreach (var v in doc.variations)
             {
-                Add(l.baseTexture);
-                Add(l.normalTexture);
-                Add(l.normalMask);
-                Add(l.mask.image);
+                Add(v.background.baseTexture);
+                Add(v.background.normalTexture);
+                foreach (var l in v.layers)
+                {
+                    Add(l.baseTexture);
+                    Add(l.normalTexture);
+                    Add(l.normalMask);
+                    Add(l.mask.image);
+                }
             }
             return used;
         }

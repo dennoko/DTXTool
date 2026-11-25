@@ -57,6 +57,9 @@ namespace Dennoko.DTXTool.Tests
 
         internal static void AssertSame(DtxDocument e, DtxDocument a)
         {
+            e.EnsureVariations();
+            a.EnsureVariations();
+            Assert.AreEqual(e.editMode, a.editMode);
             Assert.AreEqual(e.width, a.width);
             Assert.AreEqual(e.height, a.height);
             Assert.AreEqual(e.uvChannel, a.uvChannel);
@@ -64,13 +67,22 @@ namespace Dennoko.DTXTool.Tests
             Assert.AreEqual(e.triangleCount, a.triangleCount);
             Assert.AreEqual(e.submeshIndex, a.submeshIndex);
             Assert.AreEqual(e.targetName, a.targetName);
-            Assert.AreEqual(e.background.baseKind, a.background.baseKind);
-            Assert.AreEqual(e.background.color, a.background.color);
-            AssertSame(e.background.baseTexture, a.background.baseTexture);
-            Assert.AreEqual(e.background.normalKind, a.background.normalKind);
-            AssertSame(e.background.normalTexture, a.background.normalTexture);
-            Assert.AreEqual(e.layers.Count, a.layers.Count);
-            for (int i = 0; i < e.layers.Count; i++) AssertSame(e.layers[i], a.layers[i]);
+            Assert.AreEqual(e.activeVariationIndex, a.activeVariationIndex);
+            Assert.AreEqual(e.variations.Count, a.variations.Count);
+            for (int v = 0; v < e.variations.Count; v++)
+            {
+                var ev = e.variations[v];
+                var av = a.variations[v];
+                Assert.AreEqual(ev.id, av.id);
+                Assert.AreEqual(ev.name, av.name);
+                Assert.AreEqual(ev.background.baseKind, av.background.baseKind);
+                Assert.AreEqual(ev.background.color, av.background.color);
+                AssertSame(ev.background.baseTexture, av.background.baseTexture);
+                Assert.AreEqual(ev.background.normalKind, av.background.normalKind);
+                AssertSame(ev.background.normalTexture, av.background.normalTexture);
+                Assert.AreEqual(ev.layers.Count, av.layers.Count);
+                for (int i = 0; i < ev.layers.Count; i++) AssertSame(ev.layers[i], av.layers[i]);
+            }
         }
 
         internal static void AssertSame(Layer e, Layer a)
@@ -368,6 +380,55 @@ namespace Dennoko.DTXTool.Tests
             Assert.AreEqual("New", doc.UniqueName("New"));
             Assert.AreEqual("Image 2", doc.UniqueName("Image"));
             Assert.AreEqual("Layer", doc.UniqueName(""));
+        }
+
+        [Test]
+        public void Ops_VariationsDuplicateSelectRenameDeleteAndRoundTrip()
+        {
+            var doc = SampleDocument();
+            doc.editMode = EditMode.BaseOnly;
+            Assert.AreEqual(1, doc.variations.Count);
+            Assert.AreEqual("Variation 1", doc.ActiveVariation.name);
+            string firstLayerId = doc.layers[0].id;
+
+            // 追加は直前のバリエーションを複製し、新しいレイヤー ID を振る
+            var v2 = DocumentOps.AddVariation(doc);
+            Assert.AreEqual(2, doc.variations.Count);
+            Assert.AreEqual(1, doc.activeVariationIndex);
+            Assert.AreEqual("Variation 2", v2.name);
+            Assert.AreEqual(doc.variations[0].layers.Count, v2.layers.Count);
+            Assert.AreNotEqual(firstLayerId, v2.layers[0].id, "cloned layers must have fresh IDs");
+            Assert.AreEqual(doc.variations[0].background.color, v2.background.color);
+
+            // バリエーション 2 の色だけ変えてもバリエーション 1 は変わらない
+            v2.layers[0].color = Color.cyan;
+            v2.background.color = Color.magenta;
+            Assert.AreNotEqual(Color.cyan, doc.variations[0].layers[0].color);
+            Assert.AreNotEqual(Color.magenta, doc.variations[0].background.color);
+
+            // 名前変更・重複回避
+            Assert.IsTrue(DocumentOps.RenameVariation(doc, 1, "Red Variant"));
+            Assert.AreEqual("Red Variant", doc.variations[1].name);
+            var v3 = DocumentOps.AddVariation(doc);
+            Assert.AreEqual("Red Variant 2", v3.name);
+
+            // Codec ラウンドトリップ（複数バリエーション + editMode）
+            var decoded = DocumentCodec.Decode(DocumentCodec.Encode(doc));
+            AssertSame(doc, decoded);
+
+            // 全バリエーションが AdaptToMesh の対象になる
+            int lost = DocumentOps.AdaptToMesh(decoded, 999L, 128);
+            Assert.AreEqual(3, lost, "one selection layer in each of the 3 variations");
+            foreach (var v in decoded.variations)
+                Assert.AreEqual(MaskSource.Embedded, v.layers[0].mask.source);
+
+            // 切替と削除（最後の 1 件は消せない）
+            Assert.IsTrue(DocumentOps.SelectVariation(doc, 0));
+            Assert.AreEqual(0, doc.activeVariationIndex);
+            Assert.IsTrue(DocumentOps.DeleteVariation(doc, 2));
+            Assert.IsTrue(DocumentOps.DeleteVariation(doc, 1));
+            Assert.AreEqual(1, doc.variations.Count);
+            Assert.IsFalse(DocumentOps.DeleteVariation(doc, 0), "cannot delete the last remaining variation");
         }
 
         // ── MaskRaster ──

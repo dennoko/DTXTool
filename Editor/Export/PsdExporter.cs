@@ -55,7 +55,8 @@ namespace Dennoko.DTXTool
 
     /// <summary>
     /// PSD の出力と読み込み（Docs/Impl/ARCHITECTURE.md §9）。
-    ///   BaseMap フォルダ（表示）と NormalMap フォルダ（非表示）に、レイヤーをラスタライズして入れる。
+    ///   各バリエーションをフォルダとして入れ子にし、その中に BaseMap フォルダ（表示）と NormalMap フォルダ（非表示）を入れる。
+    ///   アクティブなバリエーションだけを表示状態にし、統合画像もアクティブなバリエーションの BaseMap 合成結果にする。
     ///   復元情報は Image Resource ブロックに入れ、読み込みはそれだけを使う（画素のレイヤーは読まない）。
     /// </summary>
     internal static class PsdExporter
@@ -76,6 +77,7 @@ namespace Dennoko.DTXTool
                 EditorUtility.DisplayProgressBar("DTXTool", L10n.T("status.psdWriting"), 0.1f);
                 injector.Suspend();
                 var doc = DocumentHost.instance.Doc;
+                doc.EnsureVariations();
                 int size = Mathf.Clamp(doc.width, 16, 8192);
 
                 string dir = Path.GetDirectoryName(filePath);
@@ -127,9 +129,10 @@ namespace Dennoko.DTXTool
             }
         }
 
-        /// <summary>全レイヤーを writer に足し、統合画像（BaseMap の合成結果）を返す。</summary>
+        /// <summary>全バリエーションの全レイヤーをフォルダ入れ子で writer に足し、統合画像（アクティブなバリエーションの BaseMap 合成結果）を返す。</summary>
         private static byte[] WriteLayers(WorkSession s, DtxDocument doc, int size, PsdWriter writer)
         {
+            doc.EnsureVariations();
             var gpu = s.Gpu;
             var source = new BakeSource(gpu, s.Renderer.Masks, s.EffectiveMargin(new Vector2Int(size, size)));
             using (var compositor = new Compositor(gpu))
@@ -138,46 +141,74 @@ namespace Dennoko.DTXTool
                     FilterMode.Point, TextureWrapMode.Clamp);
                 try
                 {
-                    // 下地（Base / Normal）
-                    compositor.RenderBackground(doc, size, source);
-                    byte[] bgBase = GpuReadback.ReadRGBA32(compositor.BaseResult);
-                    compositor.EncodeNormal(compositor.NormalResult, raster);
-                    byte[] bgNormal = GpuReadback.ReadRGBA32(raster);
+                    bool includeNormal = doc.editMode != EditMode.BaseOnly;
+                    int totalSteps = 0;
+                    foreach (var v in doc.variations)
+                        totalSteps += Mathf.Max(1, v.layers.Count) * (includeNormal ? 2 : 1);
+                    int doneSteps = 0;
 
-                    // BaseMap フォルダ（ファイル上は下から上の順）
-                    writer.BeginGroup();
-                    writer.AddLayer(BackgroundName, true, 1f, PsdWriter.BlendNormal, bgBase, null, true);
-                    bgBase = null;
-                    for (int i = 0; i < doc.layers.Count; i++)
+                    // PSD はファイル上「下から上」の順なので、UI 上の先頭バリエーションが最上位に来るよう逆順に書く
+                    for (int vi = doc.variations.Count - 1; vi >= 0; vi--)
                     {
-                        var layer = doc.layers[i];
-                        EditorUtility.DisplayProgressBar("DTXTool", L10n.T("status.psdWriting"), 0.1f + 0.35f * i / Mathf.Max(1, doc.layers.Count));
-                        if (!compositor.RasterBase(layer, source, raster)) continue;
-                        byte[] rgba = GpuReadback.ReadRGBA32(raster);
-                        byte[] mask = ReadMask(source, gpu, layer, size);
-                        writer.AddLayer(layer.name, layer.visible, layer.opacity, PsdWriter.BlendKey(layer.blendMode), rgba, mask, true);
-                    }
-                    writer.EndGroup(BaseGroupName, true);
+                        var variation = doc.variations[vi];
+                        bool isActive = vi == doc.activeVariationIndex;
 
-                    // NormalMap フォルダ（初期非表示。ベースのみモード時は省略）
-                    if (doc.editMode != EditMode.BaseOnly)
-                    {
-                        writer.BeginGroup();
-                        writer.AddLayer(BackgroundName, true, 1f, PsdWriter.BlendNormal, bgNormal, null, true);
-                        bgNormal = null;
-                        for (int i = 0; i < doc.layers.Count; i++)
+                        // このバリエーションの下地（Base / Normal）
+                        compositor.RenderBackground(variation.background, size, source);
+                        byte[] bgBase = GpuReadback.ReadRGBA32(compositor.BaseResult);
+                        byte[] bgNormal = null;
+                        if (includeNormal)
                         {
-                            var layer = doc.layers[i];
-                            EditorUtility.DisplayProgressBar("DTXTool", L10n.T("status.psdWriting"), 0.45f + 0.35f * i / Mathf.Max(1, doc.layers.Count));
-                            if (!compositor.RasterNormal(layer, source, raster)) continue;
+                            compositor.EncodeNormal(compositor.NormalResult, raster);
+                            bgNormal = GpuReadback.ReadRGBA32(raster);
+                        }
+
+                        // バリエーションフォルダ（外側の入れ子）
+                        writer.BeginGroup();
+
+                        // BaseMap フォルダ（ファイル上は下から上の順）
+                        writer.BeginGroup();
+                        writer.AddLayer(BackgroundName, true, 1f, PsdWriter.BlendNormal, bgBase, null, true);
+                        bgBase = null;
+                        for (int i = 0; i < variation.layers.Count; i++)
+                        {
+                            var layer = variation.layers[i];
+                            EditorUtility.DisplayProgressBar("DTXTool", L10n.T("status.psdWriting"),
+                                0.1f + 0.75f * doneSteps / Mathf.Max(1, totalSteps));
+                            doneSteps++;
+                            if (!compositor.RasterBase(layer, source, raster)) continue;
                             byte[] rgba = GpuReadback.ReadRGBA32(raster);
                             byte[] mask = ReadMask(source, gpu, layer, size);
-                            writer.AddLayer(layer.name, layer.visible, layer.opacity, PsdWriter.BlendNormal, rgba, mask, true);
+                            writer.AddLayer(layer.name, layer.visible, layer.opacity, PsdWriter.BlendKey(layer.blendMode), rgba, mask, true);
                         }
-                        writer.EndGroup(NormalGroupName, false, false);
+                        if (variation.layers.Count == 0) doneSteps++;
+                        writer.EndGroup(BaseGroupName, true);
+
+                        // NormalMap フォルダ（初期非表示。ベースのみモード時は省略）
+                        if (includeNormal)
+                        {
+                            writer.BeginGroup();
+                            writer.AddLayer(BackgroundName, true, 1f, PsdWriter.BlendNormal, bgNormal, null, true);
+                            bgNormal = null;
+                            for (int i = 0; i < variation.layers.Count; i++)
+                            {
+                                var layer = variation.layers[i];
+                                EditorUtility.DisplayProgressBar("DTXTool", L10n.T("status.psdWriting"),
+                                    0.1f + 0.75f * doneSteps / Mathf.Max(1, totalSteps));
+                                doneSteps++;
+                                if (!compositor.RasterNormal(layer, source, raster)) continue;
+                                byte[] rgba = GpuReadback.ReadRGBA32(raster);
+                                byte[] mask = ReadMask(source, gpu, layer, size);
+                                writer.AddLayer(layer.name, layer.visible, layer.opacity, PsdWriter.BlendNormal, rgba, mask, true);
+                            }
+                            if (variation.layers.Count == 0) doneSteps++;
+                            writer.EndGroup(NormalGroupName, false, false);
+                        }
+
+                        writer.EndGroup(variation.name, isActive, isActive);
                     }
 
-                    // 統合画像 = BaseMap の合成結果（エッジ拡張込み。PNG 出力と同じもの）
+                    // 統合画像 = アクティブなバリエーションの BaseMap 合成結果（エッジ拡張込み。PNG 出力と同じもの）
                     compositor.Render(doc, size, source);
                     return TextureBaker.Finish(s, compositor, size).BaseRgba;
                 }
@@ -208,24 +239,28 @@ namespace Dennoko.DTXTool
         internal static byte[] BuildPayload(WorkSession s, DtxDocument doc)
         {
             var copy = DocumentCodec.Clone(doc);
+            copy.EnsureVariations();
             copy.meshHash = (long)s.Analysis.MeshHash;
             copy.triangleCount = s.Analysis.TriangleCount;
             copy.targetName = s.Target != null ? s.Target.name : string.Empty;
             int size = Mathf.Min(EmbeddedMaskSize, Mathf.Max(16, copy.width));
             int margin = s.EffectiveMargin(new Vector2Int(size, size));
-            foreach (var layer in copy.layers)
+            foreach (var v in copy.variations)
             {
-                var m = layer.mask;
-                if (m.source != MaskSource.Selection) continue;
-                var rt = s.Renderer.Masks.RasterSelection(m.selectedBits, m.paintRle, size, margin);
-                try
+                foreach (var layer in v.layers)
                 {
-                    m.embedded = MaskRaster.Compress(GpuReadback.ReadR8(rt));
-                    m.embeddedSize = size;
-                }
-                finally
-                {
-                    s.Gpu.Release(rt);
+                    var m = layer.mask;
+                    if (m.source != MaskSource.Selection) continue;
+                    var rt = s.Renderer.Masks.RasterSelection(m.selectedBits, m.paintRle, size, margin);
+                    try
+                    {
+                        m.embedded = MaskRaster.Compress(GpuReadback.ReadR8(rt));
+                        m.embeddedSize = size;
+                    }
+                    finally
+                    {
+                        s.Gpu.Release(rt);
+                    }
                 }
             }
             return DocumentCodec.Encode(copy);
@@ -317,14 +352,18 @@ namespace Dennoko.DTXTool
             {
                 if (used && r != null && !r.IsEmpty && TextureInfo.Resolve(r) == null) n++;
             }
-            Check(doc.background.baseTexture, doc.background.baseKind == BackgroundBaseKind.Texture);
-            Check(doc.background.normalTexture, doc.background.normalKind == BackgroundNormalKind.Texture);
-            foreach (var l in doc.layers)
+            doc.EnsureVariations();
+            foreach (var v in doc.variations)
             {
-                Check(l.baseTexture, true);
-                Check(l.normalTexture, true);
-                Check(l.normalMask, true);
-                Check(l.mask.image, l.mask.source == MaskSource.Image);
+                Check(v.background.baseTexture, v.background.baseKind == BackgroundBaseKind.Texture);
+                Check(v.background.normalTexture, v.background.normalKind == BackgroundNormalKind.Texture);
+                foreach (var l in v.layers)
+                {
+                    Check(l.baseTexture, true);
+                    Check(l.normalTexture, true);
+                    Check(l.normalMask, true);
+                    Check(l.mask.image, l.mask.source == MaskSource.Image);
+                }
             }
             return n;
         }

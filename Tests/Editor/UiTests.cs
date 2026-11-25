@@ -113,6 +113,8 @@ namespace Dennoko.DTXTool.Tests
             Assert.IsTrue(Shown(root, "footer"));
             Assert.IsTrue(Shown(root, "session-banner"));
             Assert.IsTrue(Shown(root, "layers-card"));
+            Assert.IsTrue(Shown(root, "variation-bar"));
+            Assert.IsFalse(Shown(root, "variation-rename-row"));
             Assert.IsNotNull(root.Q<Button>("layer-add-all"));
             Assert.IsNotNull(root.Q<Button>("layers-empty-all"));
             Assert.IsTrue(Shown(root, "layers-empty"), "empty state invites the first selection");
