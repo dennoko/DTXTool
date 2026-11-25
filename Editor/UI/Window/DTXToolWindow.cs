@@ -230,6 +230,10 @@ namespace Dennoko.DTXTool
         private static void BindSelectCard(VisualElement root)
         {
             var title = root.Q<Label>("select-title");
+            var selectAll = root.Q<Button>("select-all");
+            selectAll.text = L10n.T("button.selectAll");
+            selectAll.tooltip = L10n.T("tooltip.selectAll");
+            selectAll.clicked += SessionCommands.SelectAll;
             root.Q<Label>("select-hint").text = L10n.T("select.hint");
             var keys = root.Q("select-keys");
             DennokoBlockUI.AddKeyHint(keys, "Shift", L10n.T("select.key.add"));

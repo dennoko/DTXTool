@@ -169,10 +169,44 @@
     background-color: var(--dennoko-selection-bg);
 }
 
+.dennoko-root .dtx-select-card__header {
+    align-items: center;
+    margin-bottom: 2px;
+}
+
 .dennoko-root .dtx-select-card__title {
     color: var(--dennoko-text-primary);
     -unity-font-style: bold;
-    margin-bottom: 2px;
+    margin-bottom: 0;
+}
+
+.dennoko-root .unity-button.dtx-select-all-button {
+    flex-shrink: 0;
+    min-height: 0;
+    height: 22px;
+    padding: 0 8px;
+    margin-left: 6px;
+    font-size: 11px;
+}
+
+/* ヘッダーの「+全体」コンパクトボタン */
+.dennoko-root .unity-button.dtx-header-chip-button {
+    flex-shrink: 0;
+    min-height: 0;
+    height: 20px;
+    padding: 0 6px;
+    margin: 0 2px;
+    font-size: 10px;
+}
+
+/* 空状態のアクション行（範囲を選択 / 全体を追加） */
+.dennoko-root .dtx-empty-actions {
+    justify-content: center;
+    margin-top: 4px;
+}
+
+.dennoko-root .dtx-empty-actions > .unity-button {
+    margin: 0 3px;
 }
 
 .dennoko-root .dtx-keyhints {

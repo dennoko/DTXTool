@@ -113,6 +113,8 @@ namespace Dennoko.DTXTool.Tests
             Assert.IsTrue(Shown(root, "footer"));
             Assert.IsTrue(Shown(root, "session-banner"));
             Assert.IsTrue(Shown(root, "layers-card"));
+            Assert.IsNotNull(root.Q<Button>("layer-add-all"));
+            Assert.IsNotNull(root.Q<Button>("layers-empty-all"));
             Assert.IsTrue(Shown(root, "layers-empty"), "empty state invites the first selection");
             Assert.IsTrue(Shown(root, "psd-card"));
             Assert.IsTrue(Shown(root, "output-dock"), "resolution and file name live above the footer");
@@ -137,6 +139,7 @@ namespace Dennoko.DTXTool.Tests
             DtxModeController.BeginSelectNew();
             root = Rebuild(window);
             Assert.IsTrue(Shown(root, "select-card"));
+            Assert.IsNotNull(root.Q<Button>("select-all"));
             Assert.IsTrue(Shown(root, "uv-card"));
             Assert.IsNull(root.Q("main-scroll").Q("uv-card"), "the UV view must not be inside the scroll view");
             Assert.IsFalse(Shown(root, "psd-card"), "only the current task is shown while selecting");

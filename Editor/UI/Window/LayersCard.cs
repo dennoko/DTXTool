@@ -14,6 +14,19 @@ namespace Dennoko.DTXTool
     {
         private static DocumentHost H => DocumentHost.instance;
 
+        /// <summary>対象メッシュ全体を選択範囲にした新しいレイヤーをワンクリックで追加する。</summary>
+        public static void AddWholeLayer(MessageOrigin origin)
+        {
+            var s = SessionController.Current;
+            if (s == null) return;
+            if (DtxModeController.IsSelecting) DtxModeController.Cancel();
+            var bits = TriangleBits.Create(s.Analysis.TriangleCount);
+            SelectionOps.SelectAll(bits, s.Active);
+            var layer = DocumentCommands.AddSelectionLayer(L10n.T("undo.addLayer"), L10n.T("layer.defaultName"), bits, null);
+            layer.color = DtxModeController.NextLayerColor(H.Doc.layers.Count);
+            Notifier.Post(MessageLevel.Success, L10n.F("status.layerAdded", layer.name), origin);
+        }
+
         /// <summary>マスク画像からレイヤーを作る（外部で作ったマスクのドラッグ＆ドロップ）。</summary>
         public static void AddImageMaskLayer(Texture2D mask, MessageOrigin origin)
         {
@@ -77,9 +90,18 @@ namespace Dennoko.DTXTool
 
             var add = DennokoIcons.Apply(root.Q<Button>("layer-add"), DennokoIcons.Plus, "+", L10n.T("tooltip.addLayer"));
             add.clicked += DtxModeController.BeginSelectNew;
+            var addAll = root.Q<Button>("layer-add-all");
+            addAll.text = L10n.T("button.addWholeLayer");
+            addAll.tooltip = L10n.T("tooltip.addWholeLayer");
+            addAll.clicked += () => LayerActions.AddWholeLayer(MessageOrigin.Window);
+
             var emptyAction = root.Q<Button>("layers-empty-action");
             emptyAction.text = L10n.T("button.selectArea");
             emptyAction.clicked += DtxModeController.BeginSelectNew;
+            var emptyAll = root.Q<Button>("layers-empty-all");
+            emptyAll.text = L10n.T("button.addWholeLayerFull");
+            emptyAll.tooltip = L10n.T("tooltip.addWholeLayer");
+            emptyAll.clicked += () => LayerActions.AddWholeLayer(MessageOrigin.Window);
 
             _duplicate = DennokoIcons.Apply(root.Q<Button>("layer-duplicate"), Icons.Duplicate, "D", L10n.T("tooltip.duplicateLayer"));
             _duplicate.clicked += LayerActions.DuplicateSelected;

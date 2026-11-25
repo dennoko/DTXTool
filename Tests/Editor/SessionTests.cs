@@ -704,6 +704,22 @@ namespace Dennoko.DTXTool.Tests
         }
 
         [Test]
+        public void WholeLayer_AddsSelectionCoveringAllActiveTriangles()
+        {
+            var s = Start();
+            LayerActions.AddWholeLayer(MessageOrigin.Window);
+            var layer = DocumentHost.instance.SelectedLayer;
+            Assert.IsNotNull(layer);
+            Assert.AreEqual(MaskSource.Selection, layer.mask.source);
+            for (int t = 0; t < s.Analysis.TriangleCount; t++)
+                Assert.IsTrue(TriangleBits.Get(layer.mask.selectedBits, t), "triangle " + t + " should be selected");
+            DocumentCommands.EditLayer(layer.id, "color", l => l.color = Color.red);
+            s.Tick();
+            AssertRed(PreviewPixel(s, Left, Mid), "left quad covered");
+            AssertRed(PreviewPixel(s, Right, Mid), "right quad covered");
+        }
+
+        [Test]
         public void Psd_ImportRejectsForeignFilesWithoutTouchingTheDocument()
         {
             var s = Start();

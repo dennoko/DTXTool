@@ -96,7 +96,10 @@
 
         <!-- 範囲選択の案内（範囲を選んでいる間だけ） -->
         <ui:VisualElement name="select-card" class="dennoko-card dtx-select-card">
-            <ui:Label name="select-title" text="範囲を選択中" class="dtx-select-card__title" />
+            <ui:VisualElement class="dennoko-hrow dtx-select-card__header">
+                <ui:Label name="select-title" text="範囲を選択中" class="dtx-select-card__title dennoko-col-grow" />
+                <ui:Button name="select-all" text="全体を選択" class="dennoko-button-secondary dtx-select-all-button" />
+            </ui:VisualElement>
             <ui:Label name="select-hint" text="" class="dennoko-hint" />
             <ui:VisualElement name="select-keys" class="dtx-keyhints" />
         </ui:VisualElement>
@@ -106,6 +109,7 @@
             <ui:VisualElement class="dennoko-card-header dennoko-card-header--row">
                 <ui:Label name="layers-header" text="レイヤー" class="dennoko-section-title dennoko-card-header__title" />
                 <ui:Button name="layer-add" class="dennoko-icon-button" />
+                <ui:Button name="layer-add-all" text="+全体" class="dennoko-button-secondary dtx-header-chip-button" />
                 <ui:Button name="layer-duplicate" class="dennoko-icon-button" />
                 <ui:Button name="layer-up" class="dennoko-icon-button" />
                 <ui:Button name="layer-down" class="dennoko-icon-button" />
@@ -114,7 +118,10 @@
             <ui:VisualElement name="layer-list" class="dtx-layer-list" />
             <ui:VisualElement name="layers-empty" class="dennoko-empty-state">
                 <ui:Label name="layers-empty-message" text="" class="dennoko-empty-state__message" />
-                <ui:Button name="layers-empty-action" text="範囲を選択" class="dennoko-button-secondary" />
+                <ui:VisualElement class="dennoko-hrow dtx-empty-actions">
+                    <ui:Button name="layers-empty-action" text="範囲を選択" class="dennoko-button-secondary" />
+                    <ui:Button name="layers-empty-all" text="全体を追加" class="dennoko-button-secondary" />
+                </ui:VisualElement>
             </ui:VisualElement>
             <ui:VisualElement name="layer-props" class="dtx-layer-props">
                 <ui:VisualElement class="dennoko-hrow dtx-layer-props__row">
